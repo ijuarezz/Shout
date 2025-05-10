@@ -227,18 +227,26 @@ class MainActivity : ComponentActivity() {
                 return
             }
 
+            val newId: String = aInfo[1]
             val newLat: String = aInfo[2]
             val newLong: String = aInfo[3]
 
-            val newDistance: FloatArray = floatArrayOf(0f)
-            Location.distanceBetween(newLat.toDouble(),newLong.toDouble(), myLat,myLong,newDistance)
+            val newLatD: Double = newLat.toDouble()
+            val newLongD: Double = newLong.toDouble()
 
+            // Warning if missing location
+            if(myLat == 0.toDouble()){
+                Toast.makeText(this@MainActivity, "Location settings error, using approximate values", Toast.LENGTH_LONG).show()
+                myLat = newLatD
+                myLong = newLongD
+            }
 
             // Check if within max distance
+            val newDistance: FloatArray = floatArrayOf(0f)
+            Location.distanceBetween(newLatD,newLongD, myLat,myLong,newDistance)
             if (newDistance[0] > maxDistance) return
 
 
-            val newId: String = aInfo[1]
             val voteStart = newId.length + newLat.length + newLong.length + 5
             val newVote: String = info.endpointName.substring( voteStart, info.endpointName.length)
 
@@ -290,6 +298,7 @@ class MainActivity : ComponentActivity() {
 
                         myLat = location.latitude
                         myLong = location.longitude
+
                     }
                 }
 
@@ -359,10 +368,7 @@ class MainActivity : ComponentActivity() {
 
         votePermissions.forEach {
 
-            if (checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED) {
-                needPermission = it
-
-            }
+            if (checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED) needPermission = it
         }
 
 
