@@ -53,7 +53,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
@@ -207,6 +206,7 @@ class MainActivity : ComponentActivity() {
     private var listOfVotes = mutableListOf<String>()
 
     private val updateFrequencyTimer = Timer(true)
+    private val update10FrequencyTimer = Timer(true)
     var timerOn = true
 
 
@@ -234,9 +234,8 @@ class MainActivity : ComponentActivity() {
             val newLatD: Double = newLat.toDouble()
             val newLongD: Double = newLong.toDouble()
 
-            // Warning if missing location
+            // Alternate location if missing
             if(myLat == 0.toDouble()){
-                Toast.makeText(this@MainActivity, "Location settings error, using approximate values", Toast.LENGTH_LONG).show()
                 myLat = newLatD
                 myLong = newLongD
             }
@@ -286,28 +285,9 @@ class MainActivity : ComponentActivity() {
 
         mutex.withLock {
 
-            // Get Location
-
-            // fusedLocationClient?.getCurrentLocation(RenderScript.Priority.PRIORITY_HIGH_ACCURACY, object : CancellationToken() {
-            fusedLocationClient?.getCurrentLocation(PRIORITY_HIGH_ACCURACY, object : CancellationToken() {
-                override fun onCanceledRequested(p0: OnTokenCanceledListener) = CancellationTokenSource().token
-                override fun isCancellationRequested() = false
-            })
-                ?.addOnSuccessListener { location: Location? ->
-                    if (location != null) {
-
-                        myLat = location.latitude
-                        myLong = location.longitude
-
-                    }
-                }
-
-
-
-
-            val options = AdvertisingOptions.Builder().setStrategy(strategy).build()
-
             connectionsClient.stopAdvertising()
+
+            val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
 
             beacon = if (beacon=="0") {"1"} else{"0"}
 
@@ -316,13 +296,14 @@ class MainActivity : ComponentActivity() {
                 "$beacon#$myId#$myLat#$myLong#$myId-$myVote",
                 packageName,
                 connectionLifecycleCallback,
-                options
+                advertisingOptions
             )
         }
 
     }
 
     private fun startDiscovery() {
+
         val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
 
         connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
@@ -479,7 +460,8 @@ class MainActivity : ComponentActivity() {
     }
 
     // UI
-    @OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3Api::class
+    @OptIn(
+        ExperimentalMaterial3Api::class
     )
     fun myUI() {
 
@@ -883,8 +865,7 @@ class MainActivity : ComponentActivity() {
             }
 
 
-            // Recurring event to update screen every "updateFrequency"
-
+            // Recurring event to update screen every updateFrequency
 
             updateFrequencyTimer.schedule(
 
@@ -917,6 +898,48 @@ class MainActivity : ComponentActivity() {
                 updateFrequency
             )
 
+
+
+            // todo replace timer with listener and interval
+            // Recurring event to get Location every 10 x updateFrequency
+
+            update10FrequencyTimer.schedule(
+
+                object : TimerTask() {
+
+                    @SuppressLint("MissingPermission")
+                    override fun run() {
+
+                        if (!timerOn) {return}
+
+                        runOnUiThread {
+
+
+
+
+                            fusedLocationClient?.getCurrentLocation(
+                                PRIORITY_HIGH_ACCURACY, object : CancellationToken() {
+                                override fun onCanceledRequested(p0: OnTokenCanceledListener) = CancellationTokenSource().token
+                                override fun isCancellationRequested() = false
+                                }
+                            )
+                                ?.addOnSuccessListener { location: Location? ->
+                                    if (location != null) {
+
+                                        myLat = location.latitude
+                                        myLong = location.longitude
+                                        Log.d("# # # # # ","getCurrentLocation")
+
+                                    }
+                                }
+
+
+                        }
+                    }
+                },
+                0,
+                10*updateFrequency
+            )
 
 
         }
