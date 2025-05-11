@@ -90,7 +90,7 @@ import java.util.TimerTask
 
 
 // CONSTANTS
-const val updateFrequency: Long = 5 * 1000   // 5 secs
+const val updateFrequency: Long = 10 * 1000   // 5 secs
 const val tooOldDuration: Long = updateFrequency * 100  // 100 secs = 8 min
 const val maxDistance: Float = 20f
 const val maxVoteLength: Int = 30
@@ -103,18 +103,18 @@ class MainActivity : ComponentActivity() {
     // Classes
     data class VoteToTallyFadeClass(val nVotes: Int, val vote: String, val ageFade: Float)
     data class IdToVoteTimeClass(val vote: String, val timeStamp: Long)
-    
+
     class VoteDbClass {
 
         private var idToVoteTime = mutableMapOf<String, IdToVoteTimeClass>()
         
         var sortByVote: Boolean = true
 
-        private val mutex = Mutex()
+        val mutexVote = Mutex()
 
         
         suspend fun add( id: String , vote: String){
-            mutex.withLock {
+            mutexVote.withLock {
 
                 if (idToVoteTime.containsKey(id)) idToVoteTime.remove(id)
                 idToVoteTime.put(id,IdToVoteTimeClass(vote = vote, timeStamp =System.currentTimeMillis() ))
@@ -126,7 +126,7 @@ class MainActivity : ComponentActivity() {
         
         suspend fun getAll(): List<VoteToTallyFadeClass> {
 
-            mutex.withLock {
+            mutexVote.withLock {
 
                 val votesSummary: MutableMap<String, Int> = HashMap()
                 val votesTimestamp: MutableMap<String, Long> = HashMap()
@@ -194,8 +194,11 @@ class MainActivity : ComponentActivity() {
 
 
     // Variables
-    var firstVote: Boolean = false
+    val mutexAdvertising = Mutex()
+    var updateFrequency10 = 9
+    private var firstVote: Boolean = false
     private var myId: String = ""
+
     var myLat: Double = 0.0
     var myLong: Double = 0.0
     var myVote: String = pendingLabel
@@ -218,11 +221,11 @@ class MainActivity : ComponentActivity() {
 
             val aInfo :  List<String> = info.endpointName.split("#")
 
-            Log.d("onEndpointFound","Incoming from ${info.endpointName}")
+            Log.d("###","Incoming from ${info.endpointName}")
 
             // Check if 5 fields were received
             if (aInfo.size != 5) {
-                Log.d("onEndpointFound","Received ${aInfo.size} instead of 5 fields received. aInfo: $aInfo")
+                Log.d("###","Received ${aInfo.size} instead of 5 fields received. aInfo: $aInfo")
                 return
             }
 
@@ -263,14 +266,14 @@ class MainActivity : ComponentActivity() {
 
         }
 
-        override fun onEndpointLost(endpointId: String) {Log.d("onEndpointLost","Lost  $endpointId")}
+        override fun onEndpointLost(endpointId: String) {Log.d("###","Lost  $endpointId")}
 
     }
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
 
-        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {Log.d("onConnectionInitiated","Incoming from ${info.endpointName}")}
-        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {Log.d("onConnectionResult","Result  $endpointId")}
-        override fun onDisconnected(endpointId: String) {Log.d("onDisconnected","Disconnected  $endpointId")}
+        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {Log.d("###","Incoming from ${info.endpointName}")}
+        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {Log.d("###","Result  $endpointId")}
+        override fun onDisconnected(endpointId: String) {Log.d("###","Disconnected  $endpointId")}
 
     }
 
@@ -281,42 +284,54 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     suspend fun startAdvertising() {
 
-        val mutex = Mutex()
-
-        mutex.withLock {
-
-            // Get Location
-
-            // fusedLocationClient?.getCurrentLocation(RenderScript.Priority.PRIORITY_HIGH_ACCURACY, object : CancellationToken() {
-            fusedLocationClient?.getCurrentLocation(PRIORITY_HIGH_ACCURACY, object : CancellationToken() {
-                override fun onCanceledRequested(p0: OnTokenCanceledListener) = CancellationTokenSource().token
-                override fun isCancellationRequested() = false
-            })
-                ?.addOnSuccessListener { location: Location? ->
-                    if (location != null) {
-
-                        myLat = location.latitude
-                        myLong = location.longitude
-
-                    }
-                }
-
-
-
-
-            val options = AdvertisingOptions.Builder().setStrategy(strategy).build()
-
+        mutexAdvertising.withLock {
             connectionsClient.stopAdvertising()
+        }
+
+
+        mutexAdvertising.withLock {
+
+            // Get Location every 10 x cycles
+            if (updateFrequency10++ == 10) {
+
+                updateFrequency10 = 0
+                fusedLocationClient?.getCurrentLocation(
+                    PRIORITY_HIGH_ACCURACY,
+                    object : CancellationToken() {
+                        override fun onCanceledRequested(p0: OnTokenCanceledListener) =
+                            CancellationTokenSource().token
+
+                        override fun isCancellationRequested() = false
+                    })
+                    ?.addOnSuccessListener { location: Location? ->
+                        if (location != null) {
+
+                            myLat = location.latitude
+                            myLong = location.longitude
+                            Log.d("###","Location: $myLat $myLong")
+
+                        }
+                    }
+
+            }
+        }
+
+
+        mutexAdvertising.withLock {
+
+            val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
+
 
             beacon = if (beacon=="0") {"1"} else{"0"}
 
             connectionsClient.startAdvertising(
-                //"$beacon#$myId#$myLat#$myLong#$myVote",
-                "$beacon#$myId#$myLat#$myLong#$myId-$myVote",
+                "$beacon#$myId#$myLat#$myLong#$myVote",
+                //"$beacon#$myId#$myLat#$myLong#$myId-$myVote",
                 packageName,
                 connectionLifecycleCallback,
-                options
+                advertisingOptions
             )
+
         }
 
     }
@@ -447,35 +462,7 @@ class MainActivity : ComponentActivity() {
 
     }
 
-    // Functions for Activity Lifecycle
 
-    private fun myStart(){
-
-        timerOn = true
-
-        startDiscovery()
-
-        runBlocking {
-            launch {
-                voteDb.add("Me",myVote)
-
-            }
-            launch {
-                startAdvertising()
-            }
-        }
-
-
-    }
-
-    private fun myStop(){
-
-        timerOn = false
-        connectionsClient.stopAdvertising()
-        connectionsClient.stopDiscovery()
-        connectionsClient.stopAllEndpoints()
-
-    }
 
     // UI
     @OptIn(
@@ -939,7 +926,11 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        myStart()
+
+        timerOn = true
+
+        startDiscovery()
+
         myUI()
 
     }
@@ -961,9 +952,12 @@ class MainActivity : ComponentActivity() {
     }
 
     @CallSuper
+
     override fun onPause() {
 
-        myStop()
+        timerOn = false
+        connectionsClient.stopAdvertising()
+
         super.onPause()
 
     }
@@ -973,7 +967,11 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
 
         saveMyPreferences()
-        myStop()
+
+        timerOn = false
+        connectionsClient.stopAdvertising()
+        connectionsClient.stopDiscovery()
+        connectionsClient.stopAllEndpoints()
 
         updateFrequencyTimer.cancel()
 
