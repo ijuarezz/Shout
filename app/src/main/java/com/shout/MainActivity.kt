@@ -1,6 +1,5 @@
 package com.shout
 
-
 import AppTheme
 import android.Manifest
 import android.annotation.SuppressLint
@@ -90,8 +89,8 @@ import java.util.TimerTask
 
 
 // CONSTANTS
-const val updateFrequency: Long = 10 * 1000   // 5 secs
-const val tooOldDuration: Long = updateFrequency * 100  // 100 secs = 8 min
+const val updateFrequency: Long = 10 * 1000   //  secs
+const val tooOldDuration: Long = updateFrequency * 60  //  same value but in minutes
 const val maxDistance: Float = 20f
 const val maxVoteLength: Int = 30
 const val pendingLabel = "\u25CF\u25CF\u25CF"
@@ -195,7 +194,7 @@ class MainActivity : ComponentActivity() {
 
     // Variables
     val mutexAdvertising = Mutex()
-    var updateFrequency10 = 9
+    var updateFrequency10 = 10
     private var firstVote: Boolean = false
     private var myId: String = ""
 
@@ -282,64 +281,87 @@ class MainActivity : ComponentActivity() {
     //Nearby functions
 
     @SuppressLint("MissingPermission")
-    suspend fun startAdvertising() {
-
-        mutexAdvertising.withLock {
-            connectionsClient.stopAdvertising()
-        }
+    suspend fun broadcastUpdate() {
 
 
         mutexAdvertising.withLock {
 
-            // Get Location every 10 x cycles
-            if (updateFrequency10++ == 10) {
+            Log.d("###","======== broadcastUpdate")
 
-                updateFrequency10 = 0
-                fusedLocationClient?.getCurrentLocation(
-                    PRIORITY_HIGH_ACCURACY,
-                    object : CancellationToken() {
-                        override fun onCanceledRequested(p0: OnTokenCanceledListener) =
-                            CancellationTokenSource().token
+            runBlocking {
 
-                        override fun isCancellationRequested() = false
-                    })
-                    ?.addOnSuccessListener { location: Location? ->
-                        if (location != null) {
+                // Stop
+                launch {
+                    Log.d("###"," broadcastUpdate stop")
 
-                            myLat = location.latitude
-                            myLong = location.longitude
-                            Log.d("###","Location: $myLat $myLong")
+                    connectionsClient.stopAdvertising()
+                    connectionsClient.stopAllEndpoints()
+                    connectionsClient.stopDiscovery()
 
-                        }
+                }
+
+                // Every 10 x cycles get Location and restart Discovery. Runs on first try.
+                launch {
+
+
+                    if (updateFrequency10++ == 10) {  updateFrequency10 = 0
+
+                        Log.d("###","  broadcastUpdate Every 10 x cycles ")
+
+                        // Get Location
+                        fusedLocationClient?.getCurrentLocation(
+                            PRIORITY_HIGH_ACCURACY,
+                            object : CancellationToken() {
+                                override fun onCanceledRequested(p0: OnTokenCanceledListener) =
+                                    CancellationTokenSource().token
+
+                                override fun isCancellationRequested() = false
+                            })
+                            ?.addOnSuccessListener { location: Location? ->
+                                if (location != null) {
+
+                                    myLat = location.latitude
+                                    myLong = location.longitude
+                                    Log.d("###","== Location: $myLat $myLong")
+
+                                }
+                            }
+
                     }
 
+                }
+
+                // Start
+                launch {
+
+                    Log.d("###","   broadcastUpdate start")
+
+                    val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
+                    connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
+
+                    val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
+
+                    beacon = if (beacon=="0") {"1"} else{"0"}
+
+                    connectionsClient.startAdvertising(
+                        "$beacon#$myId#$myLat#$myLong#$myVote",
+                        //"$beacon#$myId#$myLat#$myLong#$myId-$myVote",
+                        packageName,
+                        connectionLifecycleCallback,
+                        advertisingOptions
+                    )
+
+
+                }
+
+
             }
+
+
         }
 
 
-        mutexAdvertising.withLock {
 
-            val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
-
-
-            beacon = if (beacon=="0") {"1"} else{"0"}
-
-            connectionsClient.startAdvertising(
-                "$beacon#$myId#$myLat#$myLong#$myVote",
-                //"$beacon#$myId#$myLat#$myLong#$myId-$myVote",
-                packageName,
-                connectionLifecycleCallback,
-                advertisingOptions
-            )
-
-        }
-
-    }
-
-    private fun startDiscovery() {
-        val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
-
-        connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
     }
 
 
@@ -496,7 +518,8 @@ class MainActivity : ComponentActivity() {
                         voteDb.getAll().forEach {tallyList.add(it)}
                     }
                     launch {
-                        startAdvertising()
+                        Log.d("###","~~~~ updateMyVote triggering broadcastUpdate")
+                        broadcastUpdate()
                     }
                 }
             }
@@ -892,7 +915,8 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 launch {
-                                    startAdvertising()
+                                    Log.d("###","~~~~ timer triggering broadcastUpdate")
+                                    broadcastUpdate()
                                 }
                             }
 
@@ -926,10 +950,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-
         timerOn = true
-
-        startDiscovery()
 
         myUI()
 
@@ -956,7 +977,14 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
 
         timerOn = false
+
+
+        Log.d("###"," onPause stop")
+
         connectionsClient.stopAdvertising()
+        connectionsClient.stopAllEndpoints()
+        connectionsClient.stopDiscovery()
+
 
         super.onPause()
 
@@ -969,6 +997,9 @@ class MainActivity : ComponentActivity() {
         saveMyPreferences()
 
         timerOn = false
+
+        Log.d("###"," onDestroy stop")
+
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
         connectionsClient.stopAllEndpoints()
