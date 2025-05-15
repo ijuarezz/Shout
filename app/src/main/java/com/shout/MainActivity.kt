@@ -88,6 +88,7 @@ import java.util.Timer
 import java.util.TimerTask
 
 
+
 // CONSTANTS
 const val updateFrequency: Long = 10 * 1000   //  secs
 const val tooOldDuration: Long = updateFrequency * 60  //  same value but in minutes
@@ -283,85 +284,73 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     suspend fun broadcastUpdate() {
 
+        Log.d("###","======== broadcastUpdate")
 
-        mutexAdvertising.withLock {
+        runBlocking {
 
-            Log.d("###","======== broadcastUpdate")
-
-            runBlocking {
-
-                // Stop
-                launch {
+            // Stop
+            launch {
+                mutexAdvertising.withLock {
                     Log.d("###"," broadcastUpdate stop")
-
                     connectionsClient.stopAdvertising()
-                    connectionsClient.stopAllEndpoints()
-                    connectionsClient.stopDiscovery()
-
                 }
-
-                // Every 10 x cycles get Location and restart Discovery. Runs on first try.
-                launch {
-
-
-                    if (updateFrequency10++ == 10) {  updateFrequency10 = 0
-
-                        Log.d("###","  broadcastUpdate Every 10 x cycles ")
-
-                        // Get Location
-                        fusedLocationClient?.getCurrentLocation(
-                            PRIORITY_HIGH_ACCURACY,
-                            object : CancellationToken() {
-                                override fun onCanceledRequested(p0: OnTokenCanceledListener) =
-                                    CancellationTokenSource().token
-
-                                override fun isCancellationRequested() = false
-                            })
-                            ?.addOnSuccessListener { location: Location? ->
-                                if (location != null) {
-
-                                    myLat = location.latitude
-                                    myLong = location.longitude
-                                    Log.d("###","== Location: $myLat $myLong")
-
-                                }
-                            }
-
-                    }
-
-                }
-
-                // Start
-                launch {
-
-                    Log.d("###","   broadcastUpdate start")
-
-                    val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
-                    connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
-
-                    val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
-
-                    beacon = if (beacon=="0") {"1"} else{"0"}
-
-                    connectionsClient.startAdvertising(
-                        "$beacon#$myId#$myLat#$myLong#$myVote",
-                        //"$beacon#$myId#$myLat#$myLong#$myId-$myVote",
-                        packageName,
-                        connectionLifecycleCallback,
-                        advertisingOptions
-                    )
-
-
-                }
-
-
             }
 
+            // Start
+            launch {
+                mutexAdvertising.withLock {
+                    runBlocking {
+                        launch {
+                            Log.d("###","   broadcastUpdate start")
 
+                            val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
+
+                            beacon = if (beacon=="0") {"1"} else{"0"}
+
+                            connectionsClient.startAdvertising(
+                                "$beacon#$myId#$myLat#$myLong#$myVote",
+                                //"$beacon#$myId#$myLat#$myLong#$myId-$myVote",
+                                packageName,
+                                connectionLifecycleCallback,
+                                advertisingOptions
+                            ).addOnSuccessListener {
+                                Log.d("###","      broadcastUpdate addOnSuccessListener")
+
+                            }
+
+                        }
+                    }
+                }
+            }
         }
 
 
+        // Every 10 x cycles get Location and restart Discovery. Runs on first try.
+        mutexAdvertising.withLock {
+            if (updateFrequency10++ == 10) {  updateFrequency10 = 0
 
+                Log.d("###","  broadcastUpdate Every 10 x cycles ")
+
+                // Get Location
+                fusedLocationClient?.getCurrentLocation(
+                    PRIORITY_HIGH_ACCURACY,
+                    object : CancellationToken() {
+                        override fun onCanceledRequested(p0: OnTokenCanceledListener) =
+                            CancellationTokenSource().token
+
+                        override fun isCancellationRequested() = false
+                    })
+                    ?.addOnSuccessListener { location: Location? ->
+                        if (location != null) {
+
+                            myLat = location.latitude
+                            myLong = location.longitude
+                            Log.d("###","== Location: $myLat $myLong")
+
+                        }
+                    }
+            }
+        }
     }
 
 
@@ -942,8 +931,9 @@ class MainActivity : ComponentActivity() {
         checkPermissions()
         getMyPreferences()
 
-        connectionsClient = Nearby.getConnectionsClient(this)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+
     }
 
     @CallSuper
@@ -951,6 +941,10 @@ class MainActivity : ComponentActivity() {
         super.onResume()
 
         timerOn = true
+
+        val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
+        connectionsClient = Nearby.getConnectionsClient(this)
+        connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
 
         myUI()
 
@@ -984,7 +978,6 @@ class MainActivity : ComponentActivity() {
         connectionsClient.stopAdvertising()
         connectionsClient.stopAllEndpoints()
         connectionsClient.stopDiscovery()
-
 
         super.onPause()
 
