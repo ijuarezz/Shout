@@ -116,6 +116,7 @@ class MainActivity : ComponentActivity() {
         suspend fun add( id: String , vote: String){
             mutexVote.withLock {
 
+                Log.d("###","======== VoteDbClass  adding $id $vote")
                 if (idToVoteTime.containsKey(id)) idToVoteTime.remove(id)
                 idToVoteTime.put(id,IdToVoteTimeClass(vote = vote, timeStamp =System.currentTimeMillis() ))
                 
@@ -128,6 +129,7 @@ class MainActivity : ComponentActivity() {
 
             mutexVote.withLock {
 
+                Log.d("###","======== VoteDbClass  getAll")
                 val votesSummary: MutableMap<String, Int> = HashMap()
                 val votesTimestamp: MutableMap<String, Long> = HashMap()
                 
@@ -313,10 +315,7 @@ class MainActivity : ComponentActivity() {
                                 packageName,
                                 connectionLifecycleCallback,
                                 advertisingOptions
-                            ).addOnSuccessListener {
-                                Log.d("###","      broadcastUpdate addOnSuccessListener")
-
-                            }
+                            )
 
                         }
                     }
@@ -928,11 +927,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        Log.d("###"," onCreate")
         checkPermissions()
         getMyPreferences()
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-
+        connectionsClient = Nearby.getConnectionsClient(this)
 
     }
 
@@ -940,10 +940,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
+        Log.d("###"," onResume")
+
         timerOn = true
 
         val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
-        connectionsClient = Nearby.getConnectionsClient(this)
+
         connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
 
         myUI()
@@ -967,13 +969,11 @@ class MainActivity : ComponentActivity() {
     }
 
     @CallSuper
-
     override fun onPause() {
 
-        timerOn = false
-
-
         Log.d("###"," onPause stop")
+
+        timerOn = false
 
         connectionsClient.stopAdvertising()
         connectionsClient.stopAllEndpoints()
@@ -985,17 +985,27 @@ class MainActivity : ComponentActivity() {
 
 
     @CallSuper
-    override fun onDestroy() {
+    override fun onStop() {
 
         saveMyPreferences()
 
         timerOn = false
 
-        Log.d("###"," onDestroy stop")
+        Log.d("###"," onStop")
 
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
         connectionsClient.stopAllEndpoints()
+
+
+
+        super.onStop()
+    }
+
+    @CallSuper
+    override fun onDestroy() {
+
+        Log.d("###"," onDestroy")
 
         updateFrequencyTimer.cancel()
 
