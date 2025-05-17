@@ -82,7 +82,6 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.OnTokenCanceledListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -117,41 +116,44 @@ class MainActivity : ComponentActivity() {
 
         @OptIn(ExperimentalCoroutinesApi::class)
         suspend fun add(){
-            mutexVote.withLock {
+
 
                 while(!voteChannel.isEmpty){
 
-                    val it=voteChannel.receive()
+                    // getAll() may need to read the table in between updates
+                    mutexVote.withLock {
+                        val it = voteChannel.receive()
 
-                    Log.d("###","======== VoteDbClass  adding ${it.id} ${it.vote} ")
-                    if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
-                    idToVoteTime[it.id] = IdToVoteTimeClass(vote = it.vote, timeStamp =System.currentTimeMillis() )
-
+                        Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
+                        if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
+                        idToVoteTime[it.id] = IdToVoteTimeClass(
+                            vote = it.vote,
+                            timeStamp = System.currentTimeMillis()
+                        )
+                    }
                 }
 
                 Log.d("###","========   VoteDbClass  finished  ")
 
-
-
-            }
         }
 
         
         
         suspend fun getAll(): List<VoteToTallyFadeClass> {
 
+            Log.d("###","======== VoteDbClass  getAll")
+            val votesSummary: MutableMap<String, Int> = HashMap()
+            val votesTimestamp: MutableMap<String, Long> = HashMap()
+
+
+            val votesOutput = mutableListOf<VoteToTallyFadeClass>()
+            val tooOld: Long = System.currentTimeMillis() - tooOldDuration
+
+            // This is the only section that needs to block the DB
             mutexVote.withLock {
 
-                Log.d("###","======== VoteDbClass  getAll")
-                val votesSummary: MutableMap<String, Int> = HashMap()
-                val votesTimestamp: MutableMap<String, Long> = HashMap()
-                
-
-                    val votesOutput = mutableListOf<VoteToTallyFadeClass>()
-                    val tooOld: Long = System.currentTimeMillis() - tooOldDuration
-
                 //delete old entries by time first
-                    for (thisVote in idToVoteTime) {  if (thisVote.value.timeStamp < tooOld) idToVoteTime.remove(thisVote.key) }
+                for (thisVote in idToVoteTime) {  if (thisVote.value.timeStamp < tooOld) idToVoteTime.remove(thisVote.key)  }
 
                 // tally votes
                 for (thisVote in idToVoteTime) {
@@ -164,43 +166,39 @@ class MainActivity : ComponentActivity() {
 
                     var avgTimestamp = votesTimestamp[v]
                     if (avgTimestamp == null) avgTimestamp = thisVote.value.timeStamp
-                    votesTimestamp[v] = (avgTimestamp + thisVote.value.timeStamp)/2
+                    votesTimestamp[v] = (avgTimestamp + thisVote.value.timeStamp) / 2
 
                 }
+            }
 
 
+            // sort by either votes or alphabetically
+            val votesSorted: Map<String, Int> =
+                if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toMap()
+                else votesSummary.toList().sortedBy { (k, _) -> k }.toMap()
 
-                // sort by either votes or alphabetically
-                val votesSorted: Map<String, Int> =
-                    if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toMap()
-                    else votesSummary.toList().sortedBy { (k, _) -> k }.toMap()
+            // fade based on time
+            var ageFade: Float
 
+            for (thisVote in votesSorted) {
 
-                // add colors based on time and distance
-
-                var ageFade: Float
-
-                for (thisVote in votesSorted) {
-
-                    var avgTimestamp = votesTimestamp[thisVote.key] ?: 0L
-                    avgTimestamp -= tooOld
-                    ageFade = avgTimestamp.toFloat() / tooOldDuration.toFloat()
+                var avgTimestamp = votesTimestamp[thisVote.key] ?: 0L
+                avgTimestamp -= tooOld
+                ageFade = avgTimestamp.toFloat() / tooOldDuration.toFloat()
 
 
-                    ageFade = (ageFade * 0.8f)+0.2f  // controls transparency 20-100%
+                ageFade = (ageFade * 0.8f)+0.2f  // controls transparency 20-100%
 
-                    votesOutput.add(
-                        VoteToTallyFadeClass(
-                        nVotes = thisVote.value,
-                        vote = thisVote.key,
-                        ageFade = ageFade
-                        )
+                votesOutput.add(
+                    VoteToTallyFadeClass(
+                    nVotes = thisVote.value,
+                    vote = thisVote.key,
+                    ageFade = ageFade
                     )
-                }
+                )
+            }
 
-
-                return votesOutput
-        }
+            return votesOutput
 
         }
 
@@ -219,7 +217,7 @@ class MainActivity : ComponentActivity() {
 
     private var beacon: String=""
 
-    val voteChannel = Channel<IdVote>(10)
+    val voteChannel = Channel<IdVote>(Channel.UNLIMITED)
     var voteDb = VoteDbClass(voteChannel)
 
     private var listOfVotes = mutableListOf<String>()
@@ -322,34 +320,41 @@ class MainActivity : ComponentActivity() {
         }
 
 
-        // Every 10 x cycles get Location and restart Discovery. Runs on first try.
+        // Every 10 x cycles get Location
         if (updateFrequency10++ == 10) {  updateFrequency10 = 0
 
             Log.d("###","  broadcastUpdate Every 10 x cycles ")
-
-            // Get Location
-            fusedLocationClient?.getCurrentLocation(
-                PRIORITY_HIGH_ACCURACY,
-                object : CancellationToken() {
-                    override fun onCanceledRequested(p0: OnTokenCanceledListener) =
-                        CancellationTokenSource().token
-
-                    override fun isCancellationRequested() = false
-                })
-                ?.addOnSuccessListener { location: Location? ->
-                    if (location != null) {
-                                myLat = location.latitude
-                                myLong = location.longitude
-                                Log.d("###","== Location: $myLat $myLong")
-                    }
-
-                }
-
+            getLoc()
 
             }
         }
 
     // Independent Functions
+
+
+    @SuppressLint("MissingPermission")
+    private fun getLoc(){
+
+        // Get Location
+        fusedLocationClient?.getCurrentLocation(
+            PRIORITY_HIGH_ACCURACY,
+            object : CancellationToken() {
+                override fun onCanceledRequested(p0: OnTokenCanceledListener) =
+                    CancellationTokenSource().token
+
+                override fun isCancellationRequested() = false
+            })
+            ?.addOnSuccessListener { location: Location? ->
+                if (location != null) {
+                    myLat = location.latitude
+                    myLong = location.longitude
+                    Log.d("###","== Location: $myLat $myLong")
+                }
+
+            }
+
+    }
+
 
     private fun checkPermissions() {
 
@@ -404,6 +409,12 @@ class MainActivity : ComponentActivity() {
 
                         val errMsg = "Cannot start without required permissions"
                         Toast.makeText(this, errMsg, Toast.LENGTH_LONG).show()
+
+                        // Reset for next run & exit
+                        val packageName = applicationContext.packageName
+                        val runtime = Runtime.getRuntime()
+                        runtime.exec("pm clear $packageName")
+
                         finish()
 
                     }
@@ -910,6 +921,7 @@ class MainActivity : ComponentActivity() {
 
     // Activity Lifecycle
 
+    @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -919,6 +931,8 @@ class MainActivity : ComponentActivity() {
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         connectionsClient = Nearby.getConnectionsClient(this)
+
+        getLoc()
 
         myUI()
 
