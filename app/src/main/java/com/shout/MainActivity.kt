@@ -82,6 +82,7 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.OnTokenCanceledListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -128,7 +129,7 @@ class MainActivity : ComponentActivity() {
 
                 }
 
-                Log.d("###","========   VoteDbClass  finished  ========")
+                Log.d("###","========   VoteDbClass  finished  ")
 
 
 
@@ -141,7 +142,7 @@ class MainActivity : ComponentActivity() {
 
             mutexVote.withLock {
 
-                // Log.d("###","======== VoteDbClass  getAll")
+                Log.d("###","======== VoteDbClass  getAll")
                 val votesSummary: MutableMap<String, Int> = HashMap()
                 val votesTimestamp: MutableMap<String, Long> = HashMap()
                 
@@ -223,7 +224,7 @@ class MainActivity : ComponentActivity() {
 
     private var listOfVotes = mutableListOf<String>()
 
-    private var updateFrequencyTimer = Timer(true)
+    private val updateFrequencyTimer = Timer(true)
     var timerOn = true
 
 
@@ -294,18 +295,18 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     fun broadcastUpdate() {
 
-        // Log.d("###","======== broadcastUpdate")
+        Log.d("###","======== broadcastUpdate")
 
         // Stop
         runBlocking {
-                // Log.d("###", " broadcastUpdate stop")
+                Log.d("###", " broadcastUpdate stop")
                 connectionsClient.stopAdvertising()
         }
 
         // Start
         runBlocking {
 
-                // Log.d("###","   broadcastUpdate start")
+                Log.d("###","   broadcastUpdate start")
 
                 val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
 
@@ -324,7 +325,7 @@ class MainActivity : ComponentActivity() {
         // Every 10 x cycles get Location and restart Discovery. Runs on first try.
         if (updateFrequency10++ == 10) {  updateFrequency10 = 0
 
-            // Log.d("###","  broadcastUpdate Every 10 x cycles ")
+            Log.d("###","  broadcastUpdate Every 10 x cycles ")
 
             // Get Location
             fusedLocationClient?.getCurrentLocation(
@@ -339,7 +340,7 @@ class MainActivity : ComponentActivity() {
                     if (location != null) {
                                 myLat = location.latitude
                                 myLong = location.longitude
-                                // Log.d("###","== Location: $myLat $myLong")
+                                Log.d("###","== Location: $myLat $myLong")
                     }
 
                 }
@@ -499,7 +500,7 @@ class MainActivity : ComponentActivity() {
                         voteDb.add()
                         tallyList.clear()
                         voteDb.getAll().forEach {tallyList.add(it)}
-                        Log.d("###","~~~~ manually updated my vote")
+                        Log.d("###","~~~~ updateMyVote triggering broadcastUpdate")
                         broadcastUpdate()
                 }
             }
@@ -891,7 +892,7 @@ class MainActivity : ComponentActivity() {
                                 voteDb.add()
                                 tallyList.clear()
                                 voteDb.getAll().forEach {tallyList.add(it)}
-                                Log.d("###","~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+                                Log.d("###","~~~~ updateMyVote triggering broadcastUpdate")
                                 broadcastUpdate()
                             }
                         }
@@ -919,6 +920,8 @@ class MainActivity : ComponentActivity() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         connectionsClient = Nearby.getConnectionsClient(this)
 
+        myUI()
+
     }
 
     @CallSuper
@@ -933,7 +936,6 @@ class MainActivity : ComponentActivity() {
 
         connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
 
-        myUI()
 
     }
 
@@ -956,14 +958,13 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        Log.d("###"," onPause")
+        Log.d("###"," onPause stop")
 
         timerOn = false
 
         connectionsClient.stopAdvertising()
         connectionsClient.stopAllEndpoints()
         connectionsClient.stopDiscovery()
-        updateFrequencyTimer.cancel()
 
         super.onPause()
 
@@ -982,7 +983,8 @@ class MainActivity : ComponentActivity() {
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
         connectionsClient.stopAllEndpoints()
-        updateFrequencyTimer.cancel()
+
+
 
         super.onStop()
     }
@@ -993,8 +995,6 @@ class MainActivity : ComponentActivity() {
         Log.d("###"," onDestroy")
 
         updateFrequencyTimer.cancel()
-
-
 
         super.onDestroy()
     }
