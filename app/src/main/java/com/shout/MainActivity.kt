@@ -80,7 +80,8 @@ import com.google.android.gms.nearby.connection.Strategy
 import com.google.android.gms.tasks.CancellationToken
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.OnTokenCanceledListener
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -103,23 +104,34 @@ class MainActivity : ComponentActivity() {
     // Classes
     data class VoteToTallyFadeClass(val nVotes: Int, val vote: String, val ageFade: Float)
     data class IdToVoteTimeClass(val vote: String, val timeStamp: Long)
+    data class IdVote(val id: String, val vote: String)
 
-    class VoteDbClass {
+    class VoteDbClass (private val voteChannel: Channel<IdVote>){
 
         private var idToVoteTime = mutableMapOf<String, IdToVoteTimeClass>()
         
         var sortByVote: Boolean = true
 
-        val mutexVote = Mutex()
+        private val mutexVote = Mutex()
 
-        
-        suspend fun add( id: String , vote: String){
+        @OptIn(ExperimentalCoroutinesApi::class)
+        suspend fun add(){
             mutexVote.withLock {
 
-                Log.d("###","======== VoteDbClass  adding $id $vote")
-                if (idToVoteTime.containsKey(id)) idToVoteTime.remove(id)
-                idToVoteTime.put(id,IdToVoteTimeClass(vote = vote, timeStamp =System.currentTimeMillis() ))
-                
+                while(!voteChannel.isEmpty){
+
+                    val it=voteChannel.receive()
+
+                    Log.d("###","======== VoteDbClass  adding ${it.id} ${it.vote} ")
+                    if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
+                    idToVoteTime[it.id] = IdToVoteTimeClass(vote = it.vote, timeStamp =System.currentTimeMillis() )
+
+                }
+
+                Log.d("###","========   VoteDbClass  finished  ========")
+
+
+
             }
         }
 
@@ -129,7 +141,7 @@ class MainActivity : ComponentActivity() {
 
             mutexVote.withLock {
 
-                Log.d("###","======== VoteDbClass  getAll")
+                // Log.d("###","======== VoteDbClass  getAll")
                 val votesSummary: MutableMap<String, Int> = HashMap()
                 val votesTimestamp: MutableMap<String, Long> = HashMap()
                 
@@ -196,8 +208,7 @@ class MainActivity : ComponentActivity() {
 
 
     // Variables
-    val mutexAdvertising = Mutex()
-    var updateFrequency10 = 10
+    private var updateFrequency10 = 10
     private var firstVote: Boolean = false
     private var myId: String = ""
 
@@ -206,11 +217,13 @@ class MainActivity : ComponentActivity() {
     var myVote: String = pendingLabel
 
     private var beacon: String=""
-    var voteDb = VoteDbClass()
+
+    val voteChannel = Channel<IdVote>(10)
+    var voteDb = VoteDbClass(voteChannel)
 
     private var listOfVotes = mutableListOf<String>()
 
-    private val updateFrequencyTimer = Timer(true)
+    private var updateFrequencyTimer = Timer(true)
     var timerOn = true
 
 
@@ -258,13 +271,8 @@ class MainActivity : ComponentActivity() {
             if(newId.isEmpty() or newVote.isEmpty()) return
 
             // Add new vote
-            runBlocking {
-                launch {
-
-                    voteDb.add(newId,newVote)
-
-                }
-            }
+            runBlocking {voteChannel.send(IdVote(newId,newVote))}
+            // runBlocking {voteDb.add()}
 
         }
 
@@ -284,77 +292,63 @@ class MainActivity : ComponentActivity() {
     //Nearby functions
 
     @SuppressLint("MissingPermission")
-    suspend fun broadcastUpdate() {
+    fun broadcastUpdate() {
 
-        Log.d("###","======== broadcastUpdate")
+        // Log.d("###","======== broadcastUpdate")
 
+        // Stop
+        runBlocking {
+                // Log.d("###", " broadcastUpdate stop")
+                connectionsClient.stopAdvertising()
+        }
+
+        // Start
         runBlocking {
 
-            // Stop
-            launch {
-                mutexAdvertising.withLock {
-                    Log.d("###"," broadcastUpdate stop")
-                    connectionsClient.stopAdvertising()
-                }
-            }
+                // Log.d("###","   broadcastUpdate start")
 
-            // Start
-            launch {
-                mutexAdvertising.withLock {
-                    runBlocking {
-                        launch {
-                            Log.d("###","   broadcastUpdate start")
+                val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
 
-                            val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
+                beacon = if (beacon=="0") {"1"} else{"0"}
 
-                            beacon = if (beacon=="0") {"1"} else{"0"}
-
-                            connectionsClient.startAdvertising(
-                                "$beacon#$myId#$myLat#$myLong#$myVote",
-                                //"$beacon#$myId#$myLat#$myLong#$myId-$myVote",
-                                packageName,
-                                connectionLifecycleCallback,
-                                advertisingOptions
-                            )
-
-                        }
-                    }
-                }
-            }
+                connectionsClient.startAdvertising(
+                    "$beacon#$myId#$myLat#$myLong#$myVote",
+                    //"$beacon#$myId#$myLat#$myLong#$myId-$myVote",
+                    packageName,
+                    connectionLifecycleCallback,
+                    advertisingOptions
+                )
         }
 
 
         // Every 10 x cycles get Location and restart Discovery. Runs on first try.
-        mutexAdvertising.withLock {
-            if (updateFrequency10++ == 10) {  updateFrequency10 = 0
+        if (updateFrequency10++ == 10) {  updateFrequency10 = 0
 
-                Log.d("###","  broadcastUpdate Every 10 x cycles ")
+            // Log.d("###","  broadcastUpdate Every 10 x cycles ")
 
-                // Get Location
-                fusedLocationClient?.getCurrentLocation(
-                    PRIORITY_HIGH_ACCURACY,
-                    object : CancellationToken() {
-                        override fun onCanceledRequested(p0: OnTokenCanceledListener) =
-                            CancellationTokenSource().token
+            // Get Location
+            fusedLocationClient?.getCurrentLocation(
+                PRIORITY_HIGH_ACCURACY,
+                object : CancellationToken() {
+                    override fun onCanceledRequested(p0: OnTokenCanceledListener) =
+                        CancellationTokenSource().token
 
-                        override fun isCancellationRequested() = false
-                    })
-                    ?.addOnSuccessListener { location: Location? ->
-                        if (location != null) {
-
-                            myLat = location.latitude
-                            myLong = location.longitude
-                            Log.d("###","== Location: $myLat $myLong")
-
-                        }
+                    override fun isCancellationRequested() = false
+                })
+                ?.addOnSuccessListener { location: Location? ->
+                    if (location != null) {
+                                myLat = location.latitude
+                                myLong = location.longitude
+                                // Log.d("###","== Location: $myLat $myLong")
                     }
+
+                }
+
+
             }
         }
-    }
-
 
     // Independent Functions
-
 
     private fun checkPermissions() {
 
@@ -499,16 +493,14 @@ class MainActivity : ComponentActivity() {
 
             fun updateMyVote(){
 
+                runBlocking {voteChannel.send(IdVote("Me", myVote))}
+
                 runBlocking {
-                    launch {
-                        voteDb.add("Me", myVote)
+                        voteDb.add()
                         tallyList.clear()
                         voteDb.getAll().forEach {tallyList.add(it)}
-                    }
-                    launch {
-                        Log.d("###","~~~~ updateMyVote triggering broadcastUpdate")
+                        Log.d("###","~~~~ manually updated my vote")
                         broadcastUpdate()
-                    }
                 }
             }
 
@@ -889,26 +881,19 @@ class MainActivity : ComponentActivity() {
                 object : TimerTask() {
 
                     override fun run() {
-
                         if (!timerOn) {return}
 
                         runOnUiThread {
 
+                            runBlocking {voteChannel.send(IdVote("Me", myVote))}
 
                             runBlocking {
-                                launch {
-                                    voteDb.add("Me",myVote)
-                                    tallyList.clear()
-                                    voteDb.getAll().forEach {tallyList.add(it)}
-                                }
-
-                                launch {
-                                    Log.d("###","~~~~ timer triggering broadcastUpdate")
-                                    broadcastUpdate()
-                                }
+                                voteDb.add()
+                                tallyList.clear()
+                                voteDb.getAll().forEach {tallyList.add(it)}
+                                Log.d("###","~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+                                broadcastUpdate()
                             }
-
-
                         }
                     }
                 },
@@ -971,13 +956,14 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        Log.d("###"," onPause stop")
+        Log.d("###"," onPause")
 
         timerOn = false
 
         connectionsClient.stopAdvertising()
         connectionsClient.stopAllEndpoints()
         connectionsClient.stopDiscovery()
+        updateFrequencyTimer.cancel()
 
         super.onPause()
 
@@ -996,8 +982,7 @@ class MainActivity : ComponentActivity() {
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
         connectionsClient.stopAllEndpoints()
-
-
+        updateFrequencyTimer.cancel()
 
         super.onStop()
     }
@@ -1008,6 +993,8 @@ class MainActivity : ComponentActivity() {
         Log.d("###"," onDestroy")
 
         updateFrequencyTimer.cancel()
+
+
 
         super.onDestroy()
     }
