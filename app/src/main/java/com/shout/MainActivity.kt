@@ -15,7 +15,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,11 +91,11 @@ import kotlin.math.abs
 
 
 // CONSTANTS
-const val updateFrequency: Long = 10 * 1000   //  secs
-const val tooOldDuration: Long = updateFrequency * 60  //  same value but in minutes
-const val maxDistance: Float = 20f
-const val maxVoteLength: Int = 30
-const val pendingLabel = "\u25CF\u25CF\u25CF"
+const val updateFrequency: Long = 10 * 1000   //  10 secs
+const val tooOldDuration: Long = 5 * 1000  //  5 mins
+const val maxDistance: Float = 10f  //   10 meters
+const val maxVoteLength: Int = 30   // 30 chars
+const val pendingLabel = "\u25CF\u25CF\u25CF" // big dot as ascii
 
 
 class MainActivity : ComponentActivity() {
@@ -157,13 +159,16 @@ class MainActivity : ComponentActivity() {
 
                     val v = thisVote.value.vote
 
-                    var count = votesSummary[v]
-                    if (count == null) count = 0
-                    votesSummary[v] = count + 1
+                    //todo delete
+                    // var count = votesSummary[v]
+                    // if (count == null) count = 0
+                    // votesSummary[v] = count + 1
+                    votesSummary[v] = (votesSummary[v]?:0) + 1  // change null to 0
 
-                    var avgTimestamp = votesTimestamp[v]
-                    if (avgTimestamp == null) avgTimestamp = thisVote.value.timeStamp
-                    votesTimestamp[v] = (avgTimestamp + thisVote.value.timeStamp) / 2
+                    // var avgTimestamp = votesTimestamp[v]
+                    // if (avgTimestamp == null) avgTimestamp = thisVote.value.timeStamp
+                    // votesTimestamp[v] = (avgTimestamp + thisVote.value.timeStamp) / 2
+                    votesTimestamp[v] = thisVote.value.timeStamp + thisVote.value.timeStamp   // accumulating totals
 
                 }
             }
@@ -179,12 +184,12 @@ class MainActivity : ComponentActivity() {
 
             for (thisVote in votesSorted) {
 
-                var avgTimestamp = votesTimestamp[thisVote.key] ?: 0L
+                // var avgTimestamp = votesTimestamp[thisVote.key] ?: 0L
+                var avgTimestamp = (votesTimestamp[thisVote.key] ?: 0L)/ thisVote.value  //  average age = (sum of ages) / (sum of votes)
+
                 avgTimestamp -= tooOld
-                ageFade = avgTimestamp.toFloat() / tooOldDuration.toFloat()
-
-
-                ageFade = (ageFade * 0.8f)+0.2f  // controls transparency 20-100%
+                ageFade = avgTimestamp.toFloat() / tooOldDuration.toFloat()  // how old the vote is expressed as 0-100%
+                ageFade = (ageFade * 0.8f)+0.2f  // controls transparency but in the 20-100% range
 
                 votesOutput.add(
                     VoteToTallyFadeClass(
@@ -479,7 +484,7 @@ class MainActivity : ComponentActivity() {
 
     // UI
     @OptIn(
-        ExperimentalMaterial3Api::class
+        ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class
     )
     fun myUI() {
 
@@ -488,6 +493,7 @@ class MainActivity : ComponentActivity() {
             // Variables
 
             val animatedAlpha: Float by animateFloatAsState(if (beaconNearby) 0.45f else -0.45f, label = "alpha",animationSpec = tween(durationMillis = updateFrequency.toInt()))
+
 
             val tallyList = remember { mutableStateListOf<VoteToTallyFadeClass>() }
 
@@ -671,7 +677,8 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(all = 16.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+
                             ){
 
 
@@ -687,48 +694,58 @@ class MainActivity : ComponentActivity() {
                                 ){
                                     // Sort icon
                                     IconButton(onClick = {
-
                                         voteDb.sortByVote = !voteDb.sortByVote
                                         sortByVote.value = !sortByVote.value
-
-
+                                        Toast.makeText(this@MainActivity, (if (sortByVote.value) "Sorting by COUNT number" else "Sorting by NAME") +
+                                                "\nTAP on a existing shout to agree", Toast.LENGTH_LONG).show()
                                     }) {
-
                                         Icon(
                                             painter = if (sortByVote.value) painterResource(id = R.drawable.ic_baseline_favorite_border_24) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
                                             contentDescription = "Change",
                                             modifier = Modifier.size(30.dp)
                                         )
-
-
                                     }
 
                                     // Nearby icon
-
                                     Icon(
                                         painter = painterResource(id = R.drawable.outline_wifi_black_24) ,
                                         contentDescription = "Nearby",
-                                        modifier = Modifier.size(32.dp).alpha(0.1f+(if(beaconNearby) abs(animatedAlpha-0.45f) else abs(animatedAlpha+0.45f) ))
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .alpha(0.1f+(if(beaconNearby) abs(animatedAlpha-0.45f) else abs(animatedAlpha+0.45f) ))
+                                            .combinedClickable(
+                                                onClick = {
+                                                    Toast.makeText(this@MainActivity, "The screen updates every ${updateFrequency/1000} secs\n" +
+                                                            "LONG tap for more info",
+                                                        Toast.LENGTH_SHORT).show()
+
+                                                },
+                                                onLongClick={
+                                                    Toast.makeText(this@MainActivity, "Old entries fade away after ${tooOldDuration/1000} minutes\n" +
+                                                            "Max distance is ${maxDistance.toInt()} meters around you", // +"- Max shout length is $maxVoteLength characters.",
+                                                        Toast.LENGTH_LONG).show()
+                                                }
+                                            )
                                     )
 
 
-
-
                                     // Reset options icon
-                                    IconButton(onClick = {
-
-                                        listOfVotes = listOf("Music is too LOUD", "A música está muito ALTA", "संगीत बहुत तेज़ है" ).toMutableList()
-                                        firstVote = true
-
-                                    }) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_baseline_settings_backup_restore_24),
-                                            contentDescription = "Reset",
-                                            modifier = Modifier.size(30.dp),
-                                        )
-
-
-                                    }
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_baseline_settings_backup_restore_24),
+                                        contentDescription = "Reset",
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .combinedClickable(
+                                                onClick = {
+                                                    Toast.makeText(this@MainActivity, "LONG tap to delete your saved shouts.", Toast.LENGTH_SHORT).show()
+                                                },
+                                                onLongClick={
+                                                    listOfVotes = listOf("Music is too LOUD", "A música está muito ALTA", "संगीत बहुत तेज़ है" ).toMutableList()
+                                                    firstVote = true
+                                                    Toast.makeText(this@MainActivity, "Your saved shouts have been deleted.", Toast.LENGTH_LONG).show()
+                                                }
+                                            )
+                                    )
 
 
                                 }
