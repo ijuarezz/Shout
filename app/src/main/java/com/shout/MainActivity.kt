@@ -92,7 +92,7 @@ import kotlin.math.abs
 
 // CONSTANTS
 const val updateFrequency: Long = 10 * 1000   //  10 secs
-const val tooOldDuration: Long = 5 * 1000  //  5 mins
+const val tooOldDuration: Long = 5 * 60   //  5 mins
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
 const val pendingLabel = "\u25CF\u25CF\u25CF" // big dot as ascii
@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
                         if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
                         idToVoteTime[it.id] = IdToVoteTimeClass(
                             vote = it.vote,
-                            timeStamp = System.currentTimeMillis()
+                            timeStamp = System.currentTimeMillis()/1000
                         )
                     }
                 }
@@ -140,13 +140,13 @@ class MainActivity : ComponentActivity() {
 
         suspend fun getAll(): List<VoteToTallyFadeClass> {
 
-            // Log.d("###","======== VoteDbClass  getAll")
+
             val votesSummary: MutableMap<String, Int> = HashMap()
             val votesTimestamp: MutableMap<String, Long> = HashMap()
 
 
             val votesOutput = mutableListOf<VoteToTallyFadeClass>()
-            val tooOld: Long = System.currentTimeMillis() - tooOldDuration
+            val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldDuration
 
             // This is the only section that needs to block the DB
             mutexVote.withLock {
@@ -159,16 +159,8 @@ class MainActivity : ComponentActivity() {
 
                     val v = thisVote.value.vote
 
-                    //todo delete
-                    // var count = votesSummary[v]
-                    // if (count == null) count = 0
-                    // votesSummary[v] = count + 1
                     votesSummary[v] = (votesSummary[v]?:0) + 1  // change null to 0
-
-                    // var avgTimestamp = votesTimestamp[v]
-                    // if (avgTimestamp == null) avgTimestamp = thisVote.value.timeStamp
-                    // votesTimestamp[v] = (avgTimestamp + thisVote.value.timeStamp) / 2
-                    votesTimestamp[v] = thisVote.value.timeStamp + thisVote.value.timeStamp   // accumulating totals
+                    votesTimestamp[v] =  (votesTimestamp[v] ?:0)  + (thisVote.value.timeStamp - tooOld)   // accumulating ages in seconds
 
                 }
             }
@@ -184,10 +176,9 @@ class MainActivity : ComponentActivity() {
 
             for (thisVote in votesSorted) {
 
-                // var avgTimestamp = votesTimestamp[thisVote.key] ?: 0L
+
                 var avgTimestamp = (votesTimestamp[thisVote.key] ?: 0L)/ thisVote.value  //  average age = (sum of ages) / (sum of votes)
 
-                avgTimestamp -= tooOld
                 ageFade = avgTimestamp.toFloat() / tooOldDuration.toFloat()  // how old the vote is expressed as 0-100%
                 ageFade = (ageFade * 0.8f)+0.2f  // controls transparency but in the 20-100% range
 
@@ -721,7 +712,7 @@ class MainActivity : ComponentActivity() {
 
                                                 },
                                                 onLongClick={
-                                                    Toast.makeText(this@MainActivity, "Old entries fade away after ${tooOldDuration/1000} minutes\n" +
+                                                    Toast.makeText(this@MainActivity, "Old entries fade away after ${tooOldDuration/60} minutes\n" +
                                                             "Max distance is ${maxDistance.toInt()} meters around you", // +"- Max shout length is $maxVoteLength characters.",
                                                         Toast.LENGTH_LONG).show()
                                                 }
