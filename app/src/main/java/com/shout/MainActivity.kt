@@ -1,6 +1,6 @@
 package com.shout
 
-import AppTheme
+import com.shout.ui.theme.AppTheme
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
