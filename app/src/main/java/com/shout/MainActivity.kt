@@ -92,7 +92,8 @@ import kotlin.math.abs
 
 // CONSTANTS
 const val updateFrequency: Long = 10 * 1000   //  10 secs
-const val tooOldDuration: Long = 5 * 60   //  5 mins
+//const val tooOldDuration: Long = 5 * 60   //  5 mins
+const val tooOldDuration: Long = 30   //  30 secs
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
 const val pendingLabel = "\u25CF\u25CF\u25CF" // big dot as ascii
@@ -152,30 +153,33 @@ class MainActivity : ComponentActivity() {
             mutexVote.withLock {
 
                 //delete old entries by time first
-                for (thisVote in idToVoteTime) {  if (thisVote.value.timeStamp < tooOld) idToVoteTime.remove(thisVote.key)  }
+                val iterator = idToVoteTime.iterator()
+                while (iterator.hasNext()) {
+                    val thisVote = iterator.next()
+                    if (thisVote.value.timeStamp < tooOld) {
+                        iterator.remove()
+                    }
+                }
 
                 // tally votes
                 for (thisVote in idToVoteTime) {
-
                     val v = thisVote.value.vote
-
                     votesSummary[v] = (votesSummary[v]?:0) + 1  // change null to 0
                     votesTimestamp[v] =  (votesTimestamp[v] ?:0)  + (thisVote.value.timeStamp - tooOld)   // accumulating ages in seconds
-
                 }
             }
 
 
             // sort by either votes or alphabetically
             val votesSorted: Map<String, Int> =
-                if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toMap()
-                else votesSummary.toList().sortedBy { (k, _) -> k }.toMap()
+
+            if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toMap()
+            else votesSummary.toList().sortedBy { (k, _) -> k }.toMap()
 
             // fade based on time
             var ageFade: Float
 
             for (thisVote in votesSorted) {
-
 
                 var avgTimestamp = (votesTimestamp[thisVote.key] ?: 0L)/ thisVote.value  //  average age = (sum of ages) / (sum of votes)
 
@@ -269,14 +273,22 @@ class MainActivity : ComponentActivity() {
 
         }
 
-        override fun onEndpointLost(endpointId: String) {Log.d("###","Lost  $endpointId")}
+        override fun onEndpointLost(endpointId: String) {
+            //Log.d("###","Lost  $endpointId")
+        }
 
     }
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
 
-        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {Log.d("###","Incoming from ${info.endpointName}")}
-        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {Log.d("###","Result  $endpointId")}
-        override fun onDisconnected(endpointId: String) {Log.d("###","Disconnected  $endpointId")}
+        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
+            //Log.d("###","Incoming from ${info.endpointName}")
+        }
+        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
+            //Log.d("###","Result  $endpointId")
+        }
+        override fun onDisconnected(endpointId: String) {
+            //Log.d("###","Disconnected  $endpointId")
+        }
 
     }
 
@@ -287,7 +299,7 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     fun broadcastUpdate() {
 
-        Log.d("###","======== broadcastUpdate")
+        // Log.d("###","======== broadcastUpdate")
 
         // Stop
         runBlocking {
@@ -712,8 +724,8 @@ class MainActivity : ComponentActivity() {
 
                                                 },
                                                 onLongClick={
-                                                    Toast.makeText(this@MainActivity, "Old entries fade away after ${tooOldDuration/60} minutes\n" +
-                                                            "Max distance is ${maxDistance.toInt()} meters around you", // +"- Max shout length is $maxVoteLength characters.",
+                                                    Toast.makeText(this@MainActivity, "Entries fade away after ${tooOldDuration/60} min\n" +
+                                                            "Max distance is ${maxDistance.toInt()} meters", // +"- Max shout length is $maxVoteLength characters.",
                                                         Toast.LENGTH_LONG).show()
                                                 }
                                             )
