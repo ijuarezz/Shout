@@ -3,7 +3,6 @@ package com.shout
 import AppTheme
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
@@ -14,8 +13,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,7 +62,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import androidx.core.net.toUri
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY
@@ -87,7 +85,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.Timer
 import java.util.TimerTask
-
+import kotlin.math.abs
 
 
 // CONSTANTS
@@ -96,7 +94,6 @@ const val tooOldDuration: Long = updateFrequency * 60  //  same value but in min
 const val maxDistance: Float = 20f
 const val maxVoteLength: Int = 30
 const val pendingLabel = "\u25CF\u25CF\u25CF"
-const val upgradeWeblink = "https://drive.google.com/file/d/1DLRdklv7k9FGc0UPrMeuyQW_NZ5S7v1u/view"
 
 
 class MainActivity : ComponentActivity() {
@@ -124,7 +121,7 @@ class MainActivity : ComponentActivity() {
                     mutexVote.withLock {
                         val it = voteChannel.receive()
 
-                        Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
+                        // Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
                         if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
                         idToVoteTime[it.id] = IdToVoteTimeClass(
                             vote = it.vote,
@@ -133,15 +130,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Log.d("###","========   VoteDbClass  finished  ")
+                // Log.d("###","========   VoteDbClass  finished  ")
 
         }
 
-        
-        
+
+
         suspend fun getAll(): List<VoteToTallyFadeClass> {
 
-            Log.d("###","======== VoteDbClass  getAll")
+            // Log.d("###","======== VoteDbClass  getAll")
             val votesSummary: MutableMap<String, Int> = HashMap()
             val votesTimestamp: MutableMap<String, Long> = HashMap()
 
@@ -207,7 +204,7 @@ class MainActivity : ComponentActivity() {
 
 
     // Variables
-    private var updateFrequency10 = 10
+    private var updateFrequency10 = 0
     private var firstVote: Boolean = false
     private var myId: String = ""
 
@@ -215,7 +212,8 @@ class MainActivity : ComponentActivity() {
     var myLong: Double = 0.0
     var myVote: String = pendingLabel
 
-    private var beacon: String=""
+    private var beaconVote: String="0"
+    private var beaconNearby: Boolean=false
 
     val voteChannel = Channel<IdVote>(Channel.UNLIMITED)
     var voteDb = VoteDbClass(voteChannel)
@@ -235,11 +233,11 @@ class MainActivity : ComponentActivity() {
 
             val aInfo :  List<String> = info.endpointName.split("#")
 
-            Log.d("###","Incoming from ${info.endpointName}")
+            // Log.d("###","Incoming from ${info.endpointName}")
 
             // Check if 5 fields were received
             if (aInfo.size != 5) {
-                Log.d("###","Received ${aInfo.size} instead of 5 fields received. aInfo: $aInfo")
+                // Log.d("###","Received ${aInfo.size} instead of 5 fields received. aInfo: $aInfo")
                 return
             }
 
@@ -271,7 +269,7 @@ class MainActivity : ComponentActivity() {
 
             // Add new vote
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
-            // runBlocking {voteDb.add()}
+
 
         }
 
@@ -297,22 +295,21 @@ class MainActivity : ComponentActivity() {
 
         // Stop
         runBlocking {
-                Log.d("###", " broadcastUpdate stop")
+                // Log.d("###", " broadcastUpdate stop")
                 connectionsClient.stopAdvertising()
         }
 
         // Start
         runBlocking {
 
-                Log.d("###","   broadcastUpdate start")
+                // Log.d("###","   broadcastUpdate start")
 
                 val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
 
-                beacon = if (beacon=="0") {"1"} else{"0"}
+                beaconVote = if (beaconVote=="0") {"1"} else{"0"}
 
                 connectionsClient.startAdvertising(
-                    "$beacon#$myId#$myLat#$myLong#$myVote",
-                    //"$beacon#$myId#$myLat#$myLong#$myId-$myVote",
+                    "$beaconVote#$myId#$myLat#$myLong#$myVote",
                     packageName,
                     connectionLifecycleCallback,
                     advertisingOptions
@@ -323,7 +320,7 @@ class MainActivity : ComponentActivity() {
         // Every 10 x cycles get Location
         if (updateFrequency10++ == 10) {  updateFrequency10 = 0
 
-            Log.d("###","  broadcastUpdate Every 10 x cycles ")
+            // Log.d("###","  broadcastUpdate Every 10 x cycles ")
             getLoc()
 
             }
@@ -348,7 +345,7 @@ class MainActivity : ComponentActivity() {
                 if (location != null) {
                     myLat = location.latitude
                     myLong = location.longitude
-                    Log.d("###","== Location: $myLat $myLong")
+                    // Log.d("###","== Location: $myLat $myLong")
                 }
 
             }
@@ -489,19 +486,26 @@ class MainActivity : ComponentActivity() {
         setContent {
 
             // Variables
+
+            val animatedAlpha: Float by animateFloatAsState(if (beaconNearby) 0.45f else -0.45f, label = "alpha",animationSpec = tween(durationMillis = updateFrequency.toInt()))
+
             val tallyList = remember { mutableStateListOf<VoteToTallyFadeClass>() }
+
             var tallyColor by remember { mutableStateOf(Color.Black) }
 
             var textTyped by rememberSaveable { mutableStateOf("") }
 
             var expanded by remember { mutableStateOf(false) }
-            var qrExpanded by remember { mutableStateOf(false) }
-            val intent = remember { Intent(Intent.ACTION_VIEW, upgradeWeblink.toUri()) }
-
 
             val keyboardController = LocalSoftwareKeyboardController.current
             val focusManager = LocalFocusManager.current
             val myContext = LocalContext.current
+
+            tallyList.clear()
+            runBlocking {
+                // Log.d("###","@@@ getAll  setContent")
+                voteDb.getAll().forEach {tallyList.add(it)}
+            }
 
             fun updateMyVote(){
 
@@ -510,8 +514,9 @@ class MainActivity : ComponentActivity() {
                 runBlocking {
                         voteDb.add()
                         tallyList.clear()
+                    // Log.d("###","@@@ getAll  updateMyVote")
                         voteDb.getAll().forEach {tallyList.add(it)}
-                        Log.d("###","~~~~ updateMyVote triggering broadcastUpdate")
+                        // Log.d("###","~~~~ updateMyVote triggering broadcastUpdate")
                         broadcastUpdate()
                 }
             }
@@ -668,145 +673,68 @@ class MainActivity : ComponentActivity() {
                                     .padding(all = 16.dp)
                                     .background(MaterialTheme.colorScheme.surfaceVariant),
                             ){
-                                AnimatedVisibility(visible = !qrExpanded) {
-
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(all = 0.dp)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant),
-
-                                        horizontalArrangement = Arrangement.SpaceEvenly
-
-                                    ) {
-                                        IconButton(onClick = {
-
-                                            voteDb.sortByVote = !voteDb.sortByVote
-                                            sortByVote.value = !sortByVote.value
 
 
-                                        }) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(all = 0.dp)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
 
-                                            Icon(
-                                                painter = if (sortByVote.value) painterResource(id = R.drawable.ic_baseline_favorite_border_24) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
-                                                contentDescription = "Change",
-                                                modifier = Modifier.size(30.dp)
-                                            )
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
 
+                                ){
+                                    // Sort icon
+                                    IconButton(onClick = {
 
-                                        }
-                                        IconButton(onClick = {qrExpanded = true}) {
-                                            Icon(
-
-
-                                                painter = painterResource(id = R.drawable.ic_baseline_settings_24),
-                                                contentDescription = "Settings",
-                                                modifier = Modifier.size(30.dp),
-                                            )
+                                        voteDb.sortByVote = !voteDb.sortByVote
+                                        sortByVote.value = !sortByVote.value
 
 
-                                        }
-                                        IconButton(onClick = {
+                                    }) {
 
-                                            finishAndRemoveTask()
-
-                                        }) {
-                                            Icon(
-                                                painter = painterResource(id = R.drawable.ic_baseline_exit_to_app_24),
-                                                contentDescription = "Exit",
-                                                modifier = Modifier.size(30.dp),
-                                            )
+                                        Icon(
+                                            painter = if (sortByVote.value) painterResource(id = R.drawable.ic_baseline_favorite_border_24) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
+                                            contentDescription = "Change",
+                                            modifier = Modifier.size(30.dp)
+                                        )
 
 
-                                        }
                                     }
 
-                                }
-                                AnimatedVisibility(visible = qrExpanded) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(all = 16.dp)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    // Nearby icon
 
-                                        horizontalArrangement = Arrangement.SpaceEvenly
-
-                                    ){
-
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(all = 0.dp)
-                                                .background(MaterialTheme.colorScheme.surfaceVariant),
-
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.Top
-
-                                        ){
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.outline_wifi_black_24) ,
+                                        contentDescription = "Nearby",
+                                        modifier = Modifier.size(32.dp).alpha(0.1f+(if(beaconNearby) abs(animatedAlpha-0.45f) else abs(animatedAlpha+0.45f) ))
+                                    )
 
 
-                                            // QR code
-                                            Image(painter = painterResource(id = R.drawable.qrcode), contentDescription = null)
-
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(all = 16.dp)
-                                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-
-                                                horizontalArrangement = Arrangement.SpaceEvenly
-
-                                            ){
-
-                                                // Upgrade icon
-                                                IconButton(onClick = {
-
-                                                    myContext.startActivity(intent)
-
-                                                }) {
-                                                    Icon(
-                                                        painter = painterResource(id = R.drawable.ic_baseline_system_update_24),
-                                                        contentDescription = "upgrade",
-                                                        modifier = Modifier.size(32.dp),
-                                                    )
 
 
-                                                }
+                                    // Reset options icon
+                                    IconButton(onClick = {
 
-                                                // Reset options icon
-                                                IconButton(onClick = {
+                                        listOfVotes = listOf("Music is too LOUD", "A música está muito ALTA", "संगीत बहुत तेज़ है" ).toMutableList()
+                                        firstVote = true
 
-                                                    listOfVotes = listOf("Music is too LOUD", "A música está muito ALTA", "संगीत बहुत तेज़ है" ).toMutableList()
-                                                    firstVote = true
-
-                                                }) {
-                                                    Icon(
-                                                        painter = painterResource(id = R.drawable.ic_baseline_settings_backup_restore_24),
-                                                        contentDescription = "Reset",
-                                                        modifier = Modifier.size(32.dp),
-                                                    )
+                                    }) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_baseline_settings_backup_restore_24),
+                                            contentDescription = "Reset",
+                                            modifier = Modifier.size(30.dp),
+                                        )
 
 
-                                                }
-
-                                                // Close icon
-                                                IconButton(onClick = {
-                                                    qrExpanded = false
-
-                                                }) {
-                                                    Icon(
-                                                        painter = painterResource(id = R.drawable.ic_baseline_clear_24),
-                                                        contentDescription = "close",
-                                                        modifier = Modifier.size(32.dp),
-                                                    )
-
-                                                }
-
-
-                                            }
-                                        }
                                     }
+
+
                                 }
+
+
+
                             }
 
 
@@ -884,37 +812,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-
-            // Recurring event to update screen every "updateFrequency"
-
-
-            updateFrequencyTimer.schedule(
-
-                object : TimerTask() {
-
-                    override fun run() {
-                        if (!timerOn) {return}
-
-                        runOnUiThread {
-
-                            runBlocking {voteChannel.send(IdVote("Me", myVote))}
-
-                            runBlocking {
-                                voteDb.add()
-                                tallyList.clear()
-                                voteDb.getAll().forEach {tallyList.add(it)}
-                                Log.d("###","~~~~ updateMyVote triggering broadcastUpdate")
-                                broadcastUpdate()
-                            }
-                        }
-                    }
-                },
-                0,
-                updateFrequency
-            )
-
-
-
         }
 
     }
@@ -925,7 +822,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        Log.d("###"," onCreate")
+        // Log.d("###"," onCreate")
         checkPermissions()
         getMyPreferences()
 
@@ -934,7 +831,36 @@ class MainActivity : ComponentActivity() {
 
         getLoc()
 
-        myUI()
+
+        // Recurring event to update screen every updateFrequency
+        updateFrequencyTimer.schedule(
+
+            object : TimerTask() {
+
+                override fun run() {
+                    if (!timerOn) {return}
+
+                    runOnUiThread {
+
+                        runBlocking {voteChannel.send(IdVote("Me", myVote))}
+
+                        runBlocking {
+                            voteDb.add()
+                            // Log.d("###","~~~~~~~~~~~~~ Timer triggering broadcastUpdate")
+                            broadcastUpdate()
+
+                            // Log.d("###","  @@@@@@  beaconNearby just changed")
+
+                            myUI()
+                            beaconNearby=!beaconNearby
+                            // Log.d("###","      @@@@  after myUI")
+                        }
+                    }
+                }
+            },
+            0,
+            updateFrequency
+        )
 
     }
 
@@ -942,7 +868,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        Log.d("###"," onResume")
+        // Log.d("###"," onResume")
 
         timerOn = true
 
@@ -972,7 +898,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        Log.d("###"," onPause stop")
+        // Log.d("###"," onPause stop")
 
         timerOn = false
 
@@ -992,7 +918,7 @@ class MainActivity : ComponentActivity() {
 
         timerOn = false
 
-        Log.d("###"," onStop")
+        // Log.d("###"," onStop")
 
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
@@ -1006,7 +932,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onDestroy() {
 
-        Log.d("###"," onDestroy")
+        // Log.d("###"," onDestroy")
 
         updateFrequencyTimer.cancel()
 
