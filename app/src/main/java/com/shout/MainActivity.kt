@@ -33,12 +33,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardColors
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -204,6 +208,9 @@ class MainActivity : ComponentActivity() {
 
 
     // Variables
+
+    val tallyList =  mutableStateListOf<VoteToTallyFadeClass>()
+
     private var updateFrequency10 = 0
     private var firstVote: Boolean = false
     private var myId: String = ""
@@ -273,22 +280,14 @@ class MainActivity : ComponentActivity() {
 
         }
 
-        override fun onEndpointLost(endpointId: String) {
-            //Log.d("###","Lost  $endpointId")
-        }
+        override fun onEndpointLost(endpointId: String) {} //Log.d("###","Lost  $endpointId")
 
     }
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
 
-        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-            //Log.d("###","Incoming from ${info.endpointName}")
-        }
-        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            //Log.d("###","Result  $endpointId")
-        }
-        override fun onDisconnected(endpointId: String) {
-            //Log.d("###","Disconnected  $endpointId")
-        }
+        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {} //Log.d("###","Incoming from ${info.endpointName}")
+        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {} //Log.d("###","Result  $endpointId")
+        override fun onDisconnected(endpointId: String) {} // Log.d("###","Disconnected  $endpointId")
 
     }
 
@@ -485,6 +484,23 @@ class MainActivity : ComponentActivity() {
 
 
 
+
+    fun updateMyVote(){
+
+        runBlocking {voteChannel.send(IdVote("Me", myVote))}
+
+        runBlocking {
+            voteDb.add()
+            tallyList.clear()
+            voteDb.getAll().forEach {tallyList.add(it)}
+            broadcastUpdate()
+        }
+    }
+
+
+
+
+
     // UI
     @OptIn(
         ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class
@@ -496,10 +512,6 @@ class MainActivity : ComponentActivity() {
             // Variables
 
             val animatedAlpha: Float by animateFloatAsState(if (beaconNearby) 0.45f else -0.45f, label = "alpha",animationSpec = tween(durationMillis = updateFrequency.toInt()))
-
-
-            val tallyList = remember { mutableStateListOf<VoteToTallyFadeClass>() }
-
             var tallyColor by remember { mutableStateOf(Color.Black) }
 
             var textTyped by rememberSaveable { mutableStateOf("") }
@@ -510,25 +522,6 @@ class MainActivity : ComponentActivity() {
             val focusManager = LocalFocusManager.current
             val myContext = LocalContext.current
 
-            tallyList.clear()
-            runBlocking {
-                // Log.d("###","@@@ getAll  setContent")
-                voteDb.getAll().forEach {tallyList.add(it)}
-            }
-
-            fun updateMyVote(){
-
-                runBlocking {voteChannel.send(IdVote("Me", myVote))}
-
-                runBlocking {
-                        voteDb.add()
-                        tallyList.clear()
-                    // Log.d("###","@@@ getAll  updateMyVote")
-                        voteDb.getAll().forEach {tallyList.add(it)}
-                        // Log.d("###","~~~~ updateMyVote triggering broadcastUpdate")
-                        broadcastUpdate()
-                }
-            }
 
             AppTheme {
 
@@ -538,6 +531,8 @@ class MainActivity : ComponentActivity() {
                         .background(MaterialTheme.colorScheme.background)
 
                 ){
+
+
                     Scaffold(
                         modifier = Modifier.padding(all = 18.dp),
                         topBar = {
@@ -699,8 +694,7 @@ class MainActivity : ComponentActivity() {
                                     IconButton(onClick = {
                                         voteDb.sortByVote = !voteDb.sortByVote
                                         sortByVote.value = !sortByVote.value
-                                        Toast.makeText(this@MainActivity, (if (sortByVote.value) "Sorting by COUNT number" else "Sorting by NAME") +
-                                                "\nTAP on a existing shout to agree", Toast.LENGTH_LONG).show()
+
                                     }) {
                                         Icon(
                                             painter = if (sortByVote.value) painterResource(id = R.drawable.ic_baseline_favorite_border_24) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
@@ -717,17 +711,8 @@ class MainActivity : ComponentActivity() {
                                             .size(32.dp)
                                             .alpha(0.1f+(if(beaconNearby) abs(animatedAlpha-0.45f) else abs(animatedAlpha+0.45f) ))
                                             .combinedClickable(
-                                                onClick = {
-                                                    Toast.makeText(this@MainActivity, "The screen updates every ${updateFrequency/1000} secs\n" +
-                                                            "LONG tap for more info",
-                                                        Toast.LENGTH_SHORT).show()
-
-                                                },
-                                                onLongClick={
-                                                    Toast.makeText(this@MainActivity, "Entries fade away after ${tooOldDuration/60} min\n" +
-                                                            "Max distance is ${maxDistance.toInt()} meters", // +"- Max shout length is $maxVoteLength characters.",
-                                                        Toast.LENGTH_LONG).show()
-                                                }
+                                                onClick = {},
+                                                onLongClick={}
                                             )
                                     )
 
@@ -739,14 +724,8 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier
                                             .size(30.dp)
                                             .combinedClickable(
-                                                onClick = {
-                                                    Toast.makeText(this@MainActivity, "LONG tap to delete your saved shouts.", Toast.LENGTH_SHORT).show()
-                                                },
-                                                onLongClick={
-                                                    listOfVotes = listOf("Music is too LOUD", "A música está muito ALTA", "संगीत बहुत तेज़ है" ).toMutableList()
-                                                    firstVote = true
-                                                    Toast.makeText(this@MainActivity, "Your saved shouts have been deleted.", Toast.LENGTH_LONG).show()
-                                                }
+                                                onClick = {},
+                                                onLongClick={}
                                             )
                                     )
 
@@ -768,9 +747,7 @@ class MainActivity : ComponentActivity() {
                                 items(tallyList) { eachTally ->
 
                                     tallyColor = MaterialTheme.colorScheme.primaryContainer
-                                    val ageFade = eachTally.ageFade
-
-                                    tallyColor = Color(tallyColor.red,tallyColor.green, tallyColor.blue, ageFade,tallyColor.colorSpace)
+                                    tallyColor = Color(tallyColor.red,tallyColor.green, tallyColor.blue, eachTally.ageFade,tallyColor.colorSpace)
 
 
                                     Card(
@@ -789,7 +766,7 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier
                                             .padding(horizontal = 16.dp, vertical = 4.dp)
                                             .fillMaxWidth()
-                                            .alpha(ageFade)
+                                            .alpha(eachTally.ageFade)
 
                                     ) {
 
@@ -827,9 +804,21 @@ class MainActivity : ComponentActivity() {
                                 }
 
                             }
+
                         },
+                        floatingActionButton = {
+                            //todo replace Icons with single Icon ?
+                            FloatingActionButton(
+                                onClick = { /* do something */ },
+                            ) {
+                                Icon(Icons.Filled.Add, "Localized description")
+                            }
+
+                        },
+                        floatingActionButtonPosition = FabPosition.End
                     )
                 }
+
             }
 
         }
@@ -861,19 +850,11 @@ class MainActivity : ComponentActivity() {
                     if (!timerOn) {return}
 
                     runOnUiThread {
-
-                        runBlocking {voteChannel.send(IdVote("Me", myVote))}
+                       updateMyVote()
 
                         runBlocking {
-                            voteDb.add()
-                            // Log.d("###","~~~~~~~~~~~~~ Timer triggering broadcastUpdate")
-                            broadcastUpdate()
-
-                            // Log.d("###","  @@@@@@  beaconNearby just changed")
-
                             myUI()
                             beaconNearby=!beaconNearby
-                            // Log.d("###","      @@@@  after myUI")
                         }
                     }
                 }
