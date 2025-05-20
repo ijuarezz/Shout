@@ -101,8 +101,8 @@ import kotlin.math.abs
 
 // CONSTANTS
 const val updateFrequency: Long = 10 * 1000   //  10 secs
-//const val tooOldDuration: Long = 5 * 60   //  5 mins
-const val tooOldDuration: Long = 30   //  30 secs
+const val tooOldDuration: Long = 5 * 60   //  5 mins
+// const val tooOldDuration: Long = 30   //  30 secs
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
 const val pendingLabel = "\u25CF\u25CF\u25CF" // big dot as ascii
@@ -639,19 +639,6 @@ class MainActivity : ComponentActivity() {
                             Card(
 
                                 colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
-                                onClick = {
-
-                                    /*
-                                    if (eachTally.vote!=pendingLabel) {
-
-                                        myVote = eachTally.vote
-                                        textTyped = myVote
-
-                                        updateMyVote()
-                                    }
-                                    */
-
-                                },
 
                                 modifier = Modifier
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -673,7 +660,7 @@ class MainActivity : ComponentActivity() {
 
                                     Text(
                                         modifier = Modifier.clickable { focusRequester.requestFocus()},
-                                        text = "  +",
+                                        text = "   +",
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         maxLines = Int.MAX_VALUE,
                                         fontSize = 20.sp,
@@ -779,7 +766,12 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 items(tallyList) { eachTally ->
 
-                                    tallyColor = MaterialTheme.colorScheme.primaryContainer
+                                    tallyColor = if(myVote == eachTally.vote){
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else{
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    }
+
                                     tallyColor = Color(tallyColor.red,tallyColor.green, tallyColor.blue, eachTally.ageFade,tallyColor.colorSpace)
 
                                     Card(
@@ -803,7 +795,7 @@ class MainActivity : ComponentActivity() {
                                         Row(
 
                                             modifier = Modifier
-                                                //.padding(all = 8.dp)
+                                                .padding(all = 8.dp)
                                                 .background(color = tallyColor)
 
                                         ) {
@@ -811,20 +803,22 @@ class MainActivity : ComponentActivity() {
                                             Text(
                                                 text = eachTally.nVotes.toString(),
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.padding(all = 4.dp),
+                                                modifier = Modifier.padding(all = 9.dp),
                                                 maxLines = Int.MAX_VALUE,
                                                 )
 
+                                            /*
                                             Spacer(
                                                 modifier = Modifier
                                                     .fillMaxHeight()
-                                                    .width(5.dp)
+                                                    .width(8.dp)
                                             )
+                                            */
 
                                             Text(
                                                 text = eachTally.vote,
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.padding(all = 4.dp),
+                                                modifier = Modifier.padding(all = 9.dp),
                                                 maxLines = Int.MAX_VALUE,
                                             )
                                         }
