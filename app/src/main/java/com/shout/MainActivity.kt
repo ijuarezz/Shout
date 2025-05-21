@@ -13,28 +13,22 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -42,15 +36,16 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardColors
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuDefaults.textFieldColors
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,15 +57,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -91,6 +83,7 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.OnTokenCanceledListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -105,7 +98,7 @@ const val tooOldDuration: Long = 5 * 60   //  5 mins
 // const val tooOldDuration: Long = 30   //  30 secs
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
-const val pendingLabel = "\u25CF\u25CF\u25CF" // big dot as ascii
+const val pendingLabel = "\u25E6\u25E6\u25E6" // black dot: u25CF  dotted: u25CC   bullet:25E6
 
 
 class MainActivity : ComponentActivity() {
@@ -480,8 +473,6 @@ class MainActivity : ComponentActivity() {
         setContent {
 
             // Variables
-
-            val animatedAlpha: Float by animateFloatAsState(if (beaconNearby) 0.45f else -0.45f, label = "alpha",animationSpec = tween(durationMillis = updateFrequency.toInt()))
             // var tallyColor by remember { mutableStateOf(Color.Black) }
             var tallyColor = Color.Black
 
@@ -716,46 +707,11 @@ class MainActivity : ComponentActivity() {
 
                         },
                         bottomBar = {
-
-
-                            // Nearby icon
-                            Icon(
-                                painter = painterResource(id = R.drawable.outline_wifi_black_24) ,
-                                contentDescription = "Nearby",
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .alpha(0.1f+(if(beaconNearby) abs(animatedAlpha-0.45f) else abs(animatedAlpha+0.45f) ))
-                                    .combinedClickable(
-                                        onClick = {},
-                                        onLongClick={}
-                                    )
+                            Text(
+                                text =  (if (beaconNearby) "\u25CC\u25CF" else "\u25CF\u25CC"),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                style = MaterialTheme.typography.titleLarge,
                             )
-
-/*
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(all = 16.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-
-                            ){
-
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(all = 0.dp)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant),
-
-                                    horizontalArrangement = Arrangement.SpaceEvenly,
-                                    verticalAlignment = Alignment.CenterVertically
-
-                                ){
-                                }
-                            }
-
-
- */
 
                         },
                         content = { paddingValues ->
@@ -985,3 +941,65 @@ class MainActivity : ComponentActivity() {
 }
 
 
+
+/*
+
+                            LinearProgressIndicator(
+                                progress = {
+                                    if(beaconNearby) abs(progressBar-0.5f) else abs(progressBar+0.5f)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                // color = COMPILED_CODE,
+                                // trackColor = COMPILED_CODE,
+                                // strokeCap = COMPILED_CODE,
+                            ){Log.d("###"," progress ${if(beaconNearby) abs(progressBar-0.5f) else abs(progressBar+0.5f)}")}
+
+
+
+
+
+
+
+                            // Nearby icon
+                            Icon(
+                                painter = painterResource(id = R.drawable.outline_wifi_black_24) ,
+                                contentDescription = "Nearby",
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .alpha(0.1f+(if(beaconNearby) abs(animatedAlpha-0.45f) else abs(animatedAlpha+0.45f) ))
+                                    .combinedClickable(
+                                        onClick = {},
+                                        onLongClick={}
+                                    )
+                            )
+
+
+
+
+
+
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(all = 16.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+
+                            ){
+
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(all = 0.dp)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+
+                                ){
+                                }
+                            }
+
+
+ */
