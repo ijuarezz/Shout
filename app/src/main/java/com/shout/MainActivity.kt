@@ -13,12 +13,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -26,26 +24,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardColors
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -83,13 +79,11 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.OnTokenCanceledListener
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.Timer
 import java.util.TimerTask
-import kotlin.math.abs
 
 
 // CONSTANTS
@@ -103,113 +97,20 @@ const val pendingLabel = "\u25E6\u25E6\u25E6" // black dot: u25CF  dotted: u25CC
 
 class MainActivity : ComponentActivity() {
 
-    // Classes
+
+    // *******************  CLASSES   *******************
     data class VoteToTallyFadeClass(val nVotes: Int, val vote: String, val ageFade: Float)
     data class IdToVoteTimeClass(val vote: String, val timeStamp: Long)
     data class IdVote(val id: String, val vote: String)
 
-    class VoteDbClass (private val voteChannel: Channel<IdVote>){
 
-        private var idToVoteTime = mutableMapOf<String, IdToVoteTimeClass>()
-        
-        var sortByVote: Boolean = true
-
-        private val mutexVote = Mutex()
-
-        @OptIn(ExperimentalCoroutinesApi::class)
-        suspend fun add(){
-
-
-                while(!voteChannel.isEmpty){
-
-                    // getAll() may need to read the table in between updates
-                    mutexVote.withLock {
-                        val it = voteChannel.receive()
-
-                        // Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
-                        if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
-                        idToVoteTime[it.id] = IdToVoteTimeClass(
-                            vote = it.vote,
-                            timeStamp = System.currentTimeMillis()/1000
-                        )
-                    }
-                }
-
-                // Log.d("###","========   VoteDbClass  finished  ")
-
-        }
-
-
-
-        suspend fun getAll(): List<VoteToTallyFadeClass> {
-
-
-            val votesSummary: MutableMap<String, Int> = HashMap()
-            val votesTimestamp: MutableMap<String, Long> = HashMap()
-
-
-            val votesOutput = mutableListOf<VoteToTallyFadeClass>()
-            val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldDuration
-
-            // This is the only section that needs to block the DB
-            mutexVote.withLock {
-
-                //delete old entries by time first
-                val iterator = idToVoteTime.iterator()
-                while (iterator.hasNext()) {
-                    val thisVote = iterator.next()
-                    if (thisVote.value.timeStamp < tooOld) {
-                        iterator.remove()
-                    }
-                }
-
-                // tally votes
-                for (thisVote in idToVoteTime) {
-                    val v = thisVote.value.vote
-                    votesSummary[v] = (votesSummary[v]?:0) + 1  // change null to 0
-                    votesTimestamp[v] =  (votesTimestamp[v] ?:0)  + (thisVote.value.timeStamp - tooOld)   // accumulating ages in seconds
-                }
-            }
-
-
-            // sort by either votes or alphabetically
-            val votesSorted: Map<String, Int> =
-
-            if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toMap()
-            else votesSummary.toList().sortedBy { (k, _) -> k }.toMap()
-
-            // fade based on time
-            var ageFade: Float
-
-            for (thisVote in votesSorted) {
-
-                val avgTimestamp = (votesTimestamp[thisVote.key] ?: 0L)/ thisVote.value  //  average age = (sum of ages) / (sum of votes)
-
-                ageFade = avgTimestamp.toFloat() / tooOldDuration.toFloat()  // how old the vote is expressed as 0-100%
-                ageFade = (ageFade * 0.8f)+0.2f  // controls transparency but in the 20-100% range
-
-                votesOutput.add(
-                    VoteToTallyFadeClass(
-                    nVotes = thisVote.value,
-                    vote = thisVote.key,
-                    ageFade = ageFade
-                    )
-                )
-            }
-
-            return votesOutput
-
-        }
-
-
-    }
-
-
-    // Variables
+    // *******************  VARIABLES   *******************
 
     val tallyList =  mutableStateListOf<VoteToTallyFadeClass>()
 
     private var updateFrequency10 = 0
+
+    var sortByVote: Boolean = true
 
     private var myId: String = ""
 
@@ -221,10 +122,97 @@ class MainActivity : ComponentActivity() {
     private var beaconNearby: Boolean=false
 
     val voteChannel = Channel<IdVote>(Channel.UNLIMITED)
-    var voteDb = VoteDbClass(voteChannel)
+
 
     private val updateFrequencyTimer = Timer(true)
     var timerOn = true
+
+
+    var idToVoteTime = mutableMapOf<String, IdToVoteTimeClass>()
+    val mutexVote = Mutex()
+
+    // *******************  FUNCTIONS   *******************
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    suspend fun addVote(){
+
+
+        while(!voteChannel.isEmpty){
+
+            // getAll() may need to read the table in between updates
+            mutexVote.withLock {
+                val it = voteChannel.receive()
+
+                // Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
+                if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
+                idToVoteTime[it.id] = IdToVoteTimeClass(
+                    vote = it.vote,
+                    timeStamp = System.currentTimeMillis()/1000
+                )
+            }
+        }
+    }
+
+    suspend fun getAll(): List<VoteToTallyFadeClass> {
+
+
+        val votesSummary: MutableMap<String, Int> = HashMap()
+        val votesTimestamp: MutableMap<String, Long> = HashMap()
+
+
+        val votesOutput = mutableListOf<VoteToTallyFadeClass>()
+        val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldDuration
+
+        // This is the only section that needs to block the DB
+        mutexVote.withLock {
+
+            //delete old entries by time first
+            val iterator = idToVoteTime.iterator()
+            while (iterator.hasNext()) {
+                val thisVote = iterator.next()
+                if (thisVote.value.timeStamp < tooOld) {
+                    iterator.remove()
+                }
+            }
+
+            // tally votes
+            for (thisVote in idToVoteTime) {
+                val v = thisVote.value.vote
+                votesSummary[v] = (votesSummary[v]?:0) + 1  // change null to 0
+                votesTimestamp[v] =  (votesTimestamp[v] ?:0)  + (thisVote.value.timeStamp - tooOld)   // accumulating ages in seconds
+            }
+        }
+
+
+        // sort by either votes or alphabetically
+        val votesSorted: Map<String, Int> =
+
+            if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toMap()
+            else votesSummary.toList().sortedBy { (k, _) -> k }.toMap()
+
+        // fade based on time
+        var ageFade: Float
+
+        for (thisVote in votesSorted) {
+
+            val avgTimestamp = (votesTimestamp[thisVote.key] ?: 0L)/ thisVote.value  //  average age = (sum of ages) / (sum of votes)
+
+            ageFade = avgTimestamp.toFloat() / tooOldDuration.toFloat()  // how old the vote is expressed as 0-100%
+            ageFade = (ageFade * 0.8f)+0.2f  // controls transparency but in the 20-100% range
+
+            votesOutput.add(
+                VoteToTallyFadeClass(
+                    nVotes = thisVote.value,
+                    vote = thisVote.key,
+                    ageFade = ageFade
+                )
+            )
+        }
+
+        return votesOutput
+
+    }
+
 
 
     // Nearby & Location
@@ -453,14 +441,12 @@ class MainActivity : ComponentActivity() {
         runBlocking {voteChannel.send(IdVote("Me", myVote))}
 
         runBlocking {
-            voteDb.add()
+            addVote()
             tallyList.clear()
-            voteDb.getAll().forEach {tallyList.add(it)}
+            getAll().forEach {tallyList.add(it)}
             broadcastUpdate()
         }
     }
-
-
 
 
 
@@ -474,9 +460,12 @@ class MainActivity : ComponentActivity() {
 
             // Variables
             // var tallyColor by remember { mutableStateOf(Color.Black) }
+
             var tallyColor = Color.Black
 
             val focusRequester = remember { FocusRequester() }
+            val mySortByVote = remember { mutableStateOf(true) }
+
 
             var textTyped by rememberSaveable { mutableStateOf("") }
 
@@ -498,128 +487,6 @@ class MainActivity : ComponentActivity() {
                     Scaffold(
                         modifier = Modifier.padding(all = 18.dp),
                         topBar = {
-                        /*
-
-                            ExposedDropdownMenuBox(
-                                expanded = expanded,
-                                onExpandedChange = {
-                                    expanded = !expanded
-
-                                },
-                                modifier = Modifier.padding(all = 18.dp)
-
-                            ) {
-                                TextField(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .menuAnchor(PrimaryEditable, true)
-                                        ,
-
-                                    value = textTyped,
-
-                                    placeholder = { Text(pendingLabel) },
-                                    onValueChange = {
-                                        if (it.length <= maxVoteLength) textTyped = it
-                                        else Toast.makeText(
-                                            myContext,
-                                            "Cannot be more than $maxVoteLength characters",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-
-                                    },
-                                    singleLine = true,
-                                    trailingIcon = {
-
-                                        if (textTyped.isBlank()) {
-
-                                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-
-                                        }
-                                        else{
-
-                                            IconButton(
-                                                onClick = {
-                                                    textTyped = ""
-                                                    focusManager.clearFocus()
-                                                    myVote = pendingLabel
-                                                    updateMyVote()
-
-                                                }
-
-                                            ) {
-                                                Icon(
-
-                                                    painter = painterResource(id = R.drawable.ic_baseline_clear_24),
-                                                    contentDescription = "Clear",
-                                                    modifier = Modifier.size(30.dp),
-                                                )
-                                            }
-
-
-                                        }
-
-
-                                    },
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences),
-                                    keyboardActions = KeyboardActions(
-                                        onDone = {
-
-
-                                            // Hide keyboard
-                                            keyboardController?.hide()
-                                            expanded = false
-                                            focusManager.clearFocus()
-
-                                            myVote = textTyped
-
-                                            updateMyVote()
-
-                                        }
-                                    )
-                                )
-
-                                // filter options based on text field value
-
-                                /*
-
-                                if (filteringOptions.isNotEmpty()) {
-                                    ExposedDropdownMenu(
-                                        expanded = expanded,
-                                        onDismissRequest = { expanded = false},
-
-
-                                    ) {
-                                        filteringOptions.forEach { selectionOption ->
-
-                                            DropdownMenuItem(
-                                                text = {Text(text = selectionOption)},
-
-                                                onClick = {
-                                                    textTyped = selectionOption
-
-                                                    // Hide keyboard
-                                                    keyboardController?.hide()
-                                                    expanded = false
-                                                    focusManager.clearFocus()
-
-                                                    myVote = textTyped
-                                                    updateMyVote()
-
-
-                                                },
-
-                                                )
-
-                                        }
-                                    }
-
-                                }
-
-                                 */
-
-                            }
-
-                         */
 
                             tallyColor = if(myVote == pendingLabel){
                                 MaterialTheme.colorScheme.primaryContainer
@@ -707,11 +574,21 @@ class MainActivity : ComponentActivity() {
 
                         },
                         bottomBar = {
-                            Text(
-                                text =  (if (beaconNearby) "\u25CC\u25CF" else "\u25CF\u25CC"),
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                style = MaterialTheme.typography.titleLarge,
-                            )
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min),
+                                horizontalArrangement = Arrangement.Absolute.Center
+
+                            ){
+                                Text(
+                                    //modifier = Modifier.fillMaxWidth(),
+                                    text =  (if (beaconNearby) "\u25CB\u25CF" else "\u25CF\u25CB"),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    style = MaterialTheme.typography.headlineLarge,
+                                )
+                            }
 
                         },
                         content = { paddingValues ->
@@ -807,9 +684,19 @@ class MainActivity : ComponentActivity() {
                              */
 
                             FloatingActionButton(
-                                onClick = { /* do something */ },
+                                onClick = {
+                                    sortByVote = !sortByVote
+                                    mySortByVote.value = !mySortByVote.value
+
+                                    }
                             ) {
-                                Icon(Icons.Filled.Add, "Localized description")
+
+                                Icon(
+
+                                    painter = if (mySortByVote.value) painterResource(id = R.drawable.ic_baseline_favorite_border_24) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
+                                    contentDescription = "Change",
+                                    modifier = Modifier.size(30.dp)
+                                )
                             }
 
                         },
@@ -1001,5 +888,129 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
+
+ */
+
+
+/*
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = {
+            expanded = !expanded
+
+        },
+        modifier = Modifier.padding(all = 18.dp)
+
+    ) {
+        TextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(PrimaryEditable, true)
+                ,
+
+            value = textTyped,
+
+            placeholder = { Text(pendingLabel) },
+            onValueChange = {
+                if (it.length <= maxVoteLength) textTyped = it
+                else Toast.makeText(
+                    myContext,
+                    "Cannot be more than $maxVoteLength characters",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+            },
+            singleLine = true,
+            trailingIcon = {
+
+                if (textTyped.isBlank()) {
+
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+
+                }
+                else{
+
+                    IconButton(
+                        onClick = {
+                            textTyped = ""
+                            focusManager.clearFocus()
+                            myVote = pendingLabel
+                            updateMyVote()
+
+                        }
+
+                    ) {
+                        Icon(
+
+                            painter = painterResource(id = R.drawable.ic_baseline_clear_24),
+                            contentDescription = "Clear",
+                            modifier = Modifier.size(30.dp),
+                        )
+                    }
+
+
+                }
+
+
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences),
+            keyboardActions = KeyboardActions(
+                onDone = {
+
+
+                    // Hide keyboard
+                    keyboardController?.hide()
+                    expanded = false
+                    focusManager.clearFocus()
+
+                    myVote = textTyped
+
+                    updateMyVote()
+
+                }
+            )
+        )
+
+        // filter options based on text field value
+
+        /*
+
+        if (filteringOptions.isNotEmpty()) {
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false},
+
+
+            ) {
+                filteringOptions.forEach { selectionOption ->
+
+                    DropdownMenuItem(
+                        text = {Text(text = selectionOption)},
+
+                        onClick = {
+                            textTyped = selectionOption
+
+                            // Hide keyboard
+                            keyboardController?.hide()
+                            expanded = false
+                            focusManager.clearFocus()
+
+                            myVote = textTyped
+                            updateMyVote()
+
+
+                        },
+
+                        )
+
+                }
+            }
+
+        }
+
+         */
+
+    }
 
  */
