@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -143,7 +144,7 @@ class MainActivity : ComponentActivity() {
             mutexVote.withLock {
                 val it = voteChannel.receive()
 
-                // Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
+                Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
                 if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
                 idToVoteTime[it.id] = IdToVoteTimeClass(
                     vote = it.vote,
@@ -192,6 +193,7 @@ class MainActivity : ComponentActivity() {
 
         // fade based on time
         var ageFade: Float
+        votesOutput.clear()
 
         for (thisVote in votesSorted) {
 
@@ -199,8 +201,6 @@ class MainActivity : ComponentActivity() {
 
             ageFade = avgTimestamp.toFloat() / tooOldDuration.toFloat()  // how old the vote is expressed as 0-100%
             ageFade = (ageFade * 0.8f)+0.2f  // controls transparency but in the 20-100% range
-
-            votesOutput.clear()
 
             votesOutput.add(
                 VoteToTallyFadeClass(
@@ -226,11 +226,11 @@ class MainActivity : ComponentActivity() {
 
             val aInfo :  List<String> = info.endpointName.split("#")
 
-            // Log.d("###","Incoming from ${info.endpointName}")
+             Log.d("###","Incoming from ${info.endpointName}")
 
             // Check if 5 fields were received
             if (aInfo.size != 5) {
-                // Log.d("###","Received ${aInfo.size} instead of 5 fields received. aInfo: $aInfo")
+                 Log.d("###","Received ${aInfo.size} instead of 5 fields received. aInfo: $aInfo")
                 return
             }
 
@@ -284,7 +284,7 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     fun broadcastUpdate() {
 
-        // Log.d("###","======== broadcastUpdate")
+         // Log.d("###","======== broadcastUpdate")
 
         // Stop
         runBlocking {
@@ -313,7 +313,7 @@ class MainActivity : ComponentActivity() {
         // Every 10 x cycles get Location
         if (updateFrequency10++ == 10) {  updateFrequency10 = 0
 
-            // Log.d("###","  broadcastUpdate Every 10 x cycles ")
+             // Log.d("###","  broadcastUpdate Every 10 x cycles ")
             getLoc()
 
             }
@@ -451,13 +451,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        runBlocking {getAll()}
-
-        runBlocking {addVotes()}
-
-        runBlocking {broadcastUpdate()}
-
-        runBlocking {myUI()}
+        runBlocking {
+            getAll()
+            myUI()
+        }
 
 
     }
@@ -574,7 +571,7 @@ class MainActivity : ComponentActivity() {
                                             onDone = {
                                                 keyboardController?.hide()
                                                 focusManager.clearFocus()
-                                                myVote = textTyped
+                                                myVote = textTyped.trim()
                                                 textTyped=""
                                                 updateMyVote()
                                             }
@@ -732,8 +729,20 @@ class MainActivity : ComponentActivity() {
                     if (!timerOn) {return}
 
                     runOnUiThread {
+
+                        //todo addVotes should run on a separate timer ?
+                        runBlocking {
+                            addVotes()
+                        }
+
                         updateMyVote()
                         beaconNearby=!beaconNearby
+
+                        broadcastUpdate()
+
+
+
+
 
                     }
                 }
