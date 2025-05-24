@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -42,7 +41,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -106,7 +104,7 @@ class MainActivity : ComponentActivity() {
 
     // *******************  VARIABLES   *******************
 
-    val tallyList =  mutableStateListOf<VoteToTallyFadeClass>()
+    // val tallyList =  mutableStateListOf<VoteToTallyFadeClass>()
 
     private var updateFrequency10 = 0
 
@@ -131,10 +129,12 @@ class MainActivity : ComponentActivity() {
     var idToVoteTime = mutableMapOf<String, IdToVoteTimeClass>()
     val mutexVote = Mutex()
 
+    val votesOutput = mutableListOf<VoteToTallyFadeClass>()
+
     // *******************  FUNCTIONS   *******************
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    suspend fun addVote(){
+    suspend fun addVotes(){
 
 
         while(!voteChannel.isEmpty){
@@ -153,14 +153,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    suspend fun getAll(): List<VoteToTallyFadeClass> {
-
+    suspend fun getAll() {
+//    suspend fun getAll(): List<VoteToTallyFadeClass> {
 
         val votesSummary: MutableMap<String, Int> = HashMap()
         val votesTimestamp: MutableMap<String, Long> = HashMap()
 
 
-        val votesOutput = mutableListOf<VoteToTallyFadeClass>()
+        //val votesOutput = mutableListOf<VoteToTallyFadeClass>()
         val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldDuration
 
         // This is the only section that needs to block the DB
@@ -200,6 +200,8 @@ class MainActivity : ComponentActivity() {
             ageFade = avgTimestamp.toFloat() / tooOldDuration.toFloat()  // how old the vote is expressed as 0-100%
             ageFade = (ageFade * 0.8f)+0.2f  // controls transparency but in the 20-100% range
 
+            votesOutput.clear()
+
             votesOutput.add(
                 VoteToTallyFadeClass(
                     nVotes = thisVote.value,
@@ -209,7 +211,7 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        return votesOutput
+        // return votesOutput
 
     }
 
@@ -438,14 +440,26 @@ class MainActivity : ComponentActivity() {
 
     fun updateMyVote(){
 
-        runBlocking {voteChannel.send(IdVote("Me", myVote))}
-
         runBlocking {
-            addVote()
-            tallyList.clear()
-            getAll().forEach {tallyList.add(it)}
-            broadcastUpdate()
+            mutexVote.withLock {
+                idToVoteTime.put("Me",
+                    IdToVoteTimeClass(
+                        vote = myVote,
+                        timeStamp = System.currentTimeMillis()/1000
+                    )
+                )
+            }
         }
+
+        runBlocking {getAll()}
+
+        runBlocking {addVotes()}
+
+        runBlocking {broadcastUpdate()}
+
+        runBlocking {myUI()}
+
+
     }
 
 
@@ -597,8 +611,8 @@ class MainActivity : ComponentActivity() {
                                 contentPadding = paddingValues,
                                 modifier = Modifier.background(MaterialTheme.colorScheme.background)
                             ) {
-                                items(tallyList) { eachTally ->
-
+                    //            items(tallyList) { eachTally ->
+                                 items(votesOutput) { eachTally ->
                                     tallyColor = if(myVote == eachTally.vote){
                                         MaterialTheme.colorScheme.primaryContainer
                                     } else{
@@ -665,28 +679,11 @@ class MainActivity : ComponentActivity() {
                         },
                         floatingActionButton = {
                             //todo replace Icons with single Icon ?
-                            /*
-
-                            val sortByVote = remember { mutableStateOf(true) }
-                                    // Sort icon
-                                    IconButton(onClick = {
-                                        voteDb.sortByVote = !voteDb.sortByVote
-                                        sortByVote.value = !sortByVote.value
-
-                                    }) {
-                                        Icon(
-                                            painter = if (sortByVote.value) painterResource(id = R.drawable.ic_baseline_favorite_border_24) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
-                                            contentDescription = "Change",
-                                            modifier = Modifier.size(30.dp)
-                                        )
-                                    }
-
-                             */
-
                             FloatingActionButton(
                                 onClick = {
                                     sortByVote = !sortByVote
                                     mySortByVote.value = !mySortByVote.value
+                                    updateMyVote()
 
                                     }
                             ) {
@@ -735,12 +732,9 @@ class MainActivity : ComponentActivity() {
                     if (!timerOn) {return}
 
                     runOnUiThread {
-                       updateMyVote()
+                        updateMyVote()
+                        beaconNearby=!beaconNearby
 
-                        runBlocking {
-                            myUI()
-                            beaconNearby=!beaconNearby
-                        }
                     }
                 }
             },
@@ -1014,3 +1008,22 @@ class MainActivity : ComponentActivity() {
     }
 
  */
+
+/*
+
+val sortByVote = remember { mutableStateOf(true) }
+        // Sort icon
+        IconButton(onClick = {
+            voteDb.sortByVote = !voteDb.sortByVote
+            sortByVote.value = !sortByVote.value
+
+        }) {
+            Icon(
+                painter = if (sortByVote.value) painterResource(id = R.drawable.ic_baseline_favorite_border_24) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
+                contentDescription = "Change",
+                modifier = Modifier.size(30.dp)
+            )
+        }
+
+ */
+
