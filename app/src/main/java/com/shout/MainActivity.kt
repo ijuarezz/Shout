@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,6 +49,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -144,7 +146,7 @@ class MainActivity : ComponentActivity() {
             mutexVote.withLock {
                 val it = voteChannel.receive()
 
-                Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
+                // Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
                 if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
                 idToVoteTime[it.id] = IdToVoteTimeClass(
                     vote = it.vote,
@@ -231,7 +233,7 @@ class MainActivity : ComponentActivity() {
 
             val aInfo :  List<String> = info.endpointName.split("#")
 
-             Log.d("###","Incoming from ${info.endpointName}")
+             // Log.d("###","Incoming from ${info.endpointName}")
 
             // Check if 5 fields were received
             if (aInfo.size != 5) {
@@ -291,7 +293,7 @@ class MainActivity : ComponentActivity() {
 
         if(myVote=="") return
 
-         Log.d("###","======== broadcastUpdate")
+         // Log.d("###","======== broadcastUpdate")
 
         // Stop
         runBlocking {
@@ -521,7 +523,15 @@ class MainActivity : ComponentActivity() {
                                     TextField(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .focusRequester(focusRequester),
+                                            .focusRequester(focusRequester)
+                                            .onKeyEvent {
+                                                if (it.key == Key.Back) {
+                                                    keyboardController?.hide()
+                                                    focusManager.clearFocus()
+                                                    true
+                                                } else {
+                                                    false }
+                                            },
 
                                         value = textTyped,
                                         placeholder = { Text("Select from below or add new") },
@@ -556,6 +566,7 @@ class MainActivity : ComponentActivity() {
                                                 updateMyVote()
                                             }
                                         ),
+
 
 
                                     )
@@ -686,16 +697,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Log.d("###"," onCreate")
         checkPermissions()
+
         getMyPreferences()
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         connectionsClient = Nearby.getConnectionsClient(this)
-
-        getLoc()
-
-
 
 
         // Recurring event to process incoming votes
@@ -749,7 +756,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        Log.d("###"," onResume")
+        // Log.d("###"," onResume")
 
         timerScreenOn = true
         timerLocOn = true
@@ -780,7 +787,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        Log.d("###"," onPause")
+        // Log.d("###"," onPause")
 
         timerScreenOn = false
         timerLocOn = false
@@ -796,7 +803,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
 
 
-        Log.d("###"," onStop")
+        // Log.d("###"," onStop")
 
         timerScreenOn = false
         timerLocOn = false
@@ -809,7 +816,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onDestroy() {
 
-        Log.d("###"," onDestroy")
+        // Log.d("###"," onDestroy")
 
         timerVotes.cancel()
         timerScreen.cancel()
