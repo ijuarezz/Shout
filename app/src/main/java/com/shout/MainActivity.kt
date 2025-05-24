@@ -13,7 +13,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +31,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardColors
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -86,12 +84,14 @@ import java.util.TimerTask
 
 
 // CONSTANTS
-const val updateFrequency: Long = 10 * 1000   //  10 secs
-const val tooOldDuration: Long = 5 * 60   //  5 mins
-// const val tooOldDuration: Long = 30   //  30 secs
+const val votesFreq: Long = 1 * 1000   //  1 sec
+const val screenFreq: Long = 5 * 1000   //  5 sec
+const val locFreq: Long = 60 * 1000   //  1 min
+
+const val tooOldDuration: Long = 3 * 60   //  3 mins
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
-const val pendingLabel = "\u25E6\u25E6\u25E6" // black dot: u25CF  dotted: u25CC   bullet:25E6
+
 
 
 class MainActivity : ComponentActivity() {
@@ -105,17 +105,12 @@ class MainActivity : ComponentActivity() {
 
     // *******************  VARIABLES   *******************
 
-    // val tallyList =  mutableStateListOf<VoteToTallyFadeClass>()
-
-    private var updateFrequency10 = 0
-
-    var sortByVote: Boolean = true
-
+    private var sortByVote: Boolean = true
     private var myId: String = ""
 
     var myLat: Double = 0.0
     var myLong: Double = 0.0
-    var myVote: String = pendingLabel
+    private var myVote=""
 
     private var beaconVote: String="0"
     private var beaconNearby: Boolean=false
@@ -123,14 +118,19 @@ class MainActivity : ComponentActivity() {
     val voteChannel = Channel<IdVote>(Channel.UNLIMITED)
 
 
-    private val updateFrequencyTimer = Timer(true)
-    var timerOn = true
+    private val timerVotes = Timer(true)
+    private val timerScreen = Timer(true)
+    private val timerLoc = Timer(true)
+
+    var timerVotesOn = true
+    var timerScreenOn = true
+    var timerLocOn = true
 
 
-    var idToVoteTime = mutableMapOf<String, IdToVoteTimeClass>()
-    val mutexVote = Mutex()
+    private var idToVoteTime = mutableMapOf<String, IdToVoteTimeClass>()
+    private val mutexVote = Mutex()
 
-    val votesOutput = mutableListOf<VoteToTallyFadeClass>()
+    private val votesOutput = mutableListOf<VoteToTallyFadeClass>()
 
     // *******************  FUNCTIONS   *******************
 
@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
 
         while(!voteChannel.isEmpty){
 
-            // getAll() may need to read the table in between updates
+            // tallyVotes may need to read the table in between updates
             mutexVote.withLock {
                 val it = voteChannel.receive()
 
@@ -154,14 +154,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    suspend fun getAll() {
-//    suspend fun getAll(): List<VoteToTallyFadeClass> {
+    private suspend fun tallyVotes() {
 
         val votesSummary: MutableMap<String, Int> = HashMap()
         val votesTimestamp: MutableMap<String, Long> = HashMap()
-
-
-        //val votesOutput = mutableListOf<VoteToTallyFadeClass>()
         val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldDuration
 
         // This is the only section that needs to block the DB
@@ -175,6 +171,16 @@ class MainActivity : ComponentActivity() {
                     iterator.remove()
                 }
             }
+
+
+            // add my vote
+            if(myVote!=""){
+                idToVoteTime["Me"] = IdToVoteTimeClass(
+                    vote = myVote,
+                    timeStamp = System.currentTimeMillis()/1000
+                )
+    }
+
 
             // tally votes
             for (thisVote in idToVoteTime) {
@@ -211,7 +217,6 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        // return votesOutput
 
     }
 
@@ -230,7 +235,7 @@ class MainActivity : ComponentActivity() {
 
             // Check if 5 fields were received
             if (aInfo.size != 5) {
-                 Log.d("###","Received ${aInfo.size} instead of 5 fields received. aInfo: $aInfo")
+                 // Log.d("###","Received ${aInfo.size} instead of 5 fields received. aInfo: $aInfo")
                 return
             }
 
@@ -284,7 +289,9 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     fun broadcastUpdate() {
 
-         // Log.d("###","======== broadcastUpdate")
+        if(myVote=="") return
+
+         Log.d("###","======== broadcastUpdate")
 
         // Stop
         runBlocking {
@@ -309,15 +316,7 @@ class MainActivity : ComponentActivity() {
                 )
         }
 
-
-        // Every 10 x cycles get Location
-        if (updateFrequency10++ == 10) {  updateFrequency10 = 0
-
-             // Log.d("###","  broadcastUpdate Every 10 x cycles ")
-            getLoc()
-
-            }
-        }
+    }
 
     // Independent Functions
 
@@ -439,40 +438,21 @@ class MainActivity : ComponentActivity() {
 
 
     fun updateMyVote(){
-
-        runBlocking {
-            mutexVote.withLock {
-                idToVoteTime.put("Me",
-                    IdToVoteTimeClass(
-                        vote = myVote,
-                        timeStamp = System.currentTimeMillis()/1000
-                    )
-                )
-            }
-        }
-
-        runBlocking {
-            getAll()
-            myUI()
-        }
-
-
+        runBlocking {tallyVotes()}
+        myUI()
     }
 
 
 
     // UI
-    @OptIn(
-        ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class
-    )
-    fun myUI() {
+    private fun myUI() {
 
         setContent {
 
             // Variables
             // var tallyColor by remember { mutableStateOf(Color.Black) }
 
-            var tallyColor = Color.Black
+            var tallyColor: Color
 
             val focusRequester = remember { FocusRequester() }
             val mySortByVote = remember { mutableStateOf(true) }
@@ -499,7 +479,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(all = 18.dp),
                         topBar = {
 
-                            tallyColor = if(myVote == pendingLabel){
+                            tallyColor = if(myVote == ""){
                                 MaterialTheme.colorScheme.primaryContainer
                             } else{
                                 MaterialTheme.colorScheme.surfaceVariant
@@ -621,12 +601,8 @@ class MainActivity : ComponentActivity() {
                                     Card(
                                         colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
                                         onClick = {
-                                            if (eachTally.vote!=pendingLabel) {
-
                                                 myVote = eachTally.vote
                                                 updateMyVote()
-                                            }
-
                                         },
 
                                         modifier = Modifier
@@ -720,35 +696,51 @@ class MainActivity : ComponentActivity() {
         getLoc()
 
 
-        // Recurring event to update screen every updateFrequency
-        updateFrequencyTimer.schedule(
+
+
+        // Recurring event to process incoming votes
+        timerVotes.schedule(
 
             object : TimerTask() {
-
                 override fun run() {
-                    if (!timerOn) {return}
-
+                    if (!timerVotesOn) {return}
                     runOnUiThread {
-
-                        //todo addVotes should run on a separate timer ?
-                        runBlocking {
-                            addVotes()
-                        }
-
-                        updateMyVote()
-                        beaconNearby=!beaconNearby
-
-                        broadcastUpdate()
-
-
-
-
-
+                        runBlocking {addVotes()}
                     }
                 }
             },
             0,
-            updateFrequency
+            votesFreq
+        )
+
+        // Recurring event to update Screen
+        timerScreen.schedule(
+            object : TimerTask() {
+
+                override fun run() {
+                    if (!timerScreenOn) {return}
+                    runOnUiThread {
+                        updateMyVote()
+                        beaconNearby=!beaconNearby
+                        broadcastUpdate()
+                    }
+                }
+            },
+            0,
+            screenFreq
+        )
+
+        // Recurring event to update Location
+        timerLoc.schedule(
+
+            object : TimerTask() {
+                override fun run() {
+                    if (!timerLocOn) {return}
+                    runOnUiThread {getLoc()}
+                }
+            },
+            0,
+            locFreq
         )
 
     }
@@ -757,9 +749,10 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        // Log.d("###"," onResume")
+        Log.d("###"," onResume")
 
-        timerOn = true
+        timerScreenOn = true
+        timerLocOn = true
 
         val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
 
@@ -787,13 +780,12 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        // Log.d("###"," onPause stop")
+        Log.d("###"," onPause")
 
-        timerOn = false
+        timerScreenOn = false
+        timerLocOn = false
 
         connectionsClient.stopAdvertising()
-        connectionsClient.stopAllEndpoints()
-        connectionsClient.stopDiscovery()
 
         super.onPause()
 
@@ -804,16 +796,12 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
 
 
+        Log.d("###"," onStop")
 
-        timerOn = false
-
-        // Log.d("###"," onStop")
+        timerScreenOn = false
+        timerLocOn = false
 
         connectionsClient.stopAdvertising()
-        connectionsClient.stopDiscovery()
-        connectionsClient.stopAllEndpoints()
-
-
 
         super.onStop()
     }
@@ -821,218 +809,16 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onDestroy() {
 
-        // Log.d("###"," onDestroy")
+        Log.d("###"," onDestroy")
 
-        updateFrequencyTimer.cancel()
+        timerVotes.cancel()
+        timerScreen.cancel()
+        timerLoc.cancel()
+
+        connectionsClient.stopAllEndpoints()
+        connectionsClient.stopDiscovery()
 
         super.onDestroy()
     }
 
 }
-
-
-
-/*
-
-                            LinearProgressIndicator(
-                                progress = {
-                                    if(beaconNearby) abs(progressBar-0.5f) else abs(progressBar+0.5f)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                // color = COMPILED_CODE,
-                                // trackColor = COMPILED_CODE,
-                                // strokeCap = COMPILED_CODE,
-                            ){Log.d("###"," progress ${if(beaconNearby) abs(progressBar-0.5f) else abs(progressBar+0.5f)}")}
-
-
-
-
-
-
-
-                            // Nearby icon
-                            Icon(
-                                painter = painterResource(id = R.drawable.outline_wifi_black_24) ,
-                                contentDescription = "Nearby",
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .alpha(0.1f+(if(beaconNearby) abs(animatedAlpha-0.45f) else abs(animatedAlpha+0.45f) ))
-                                    .combinedClickable(
-                                        onClick = {},
-                                        onLongClick={}
-                                    )
-                            )
-
-
-
-
-
-
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(all = 16.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-
-                            ){
-
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(all = 0.dp)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant),
-
-                                    horizontalArrangement = Arrangement.SpaceEvenly,
-                                    verticalAlignment = Alignment.CenterVertically
-
-                                ){
-                                }
-                            }
-
-
- */
-
-
-/*
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = {
-            expanded = !expanded
-
-        },
-        modifier = Modifier.padding(all = 18.dp)
-
-    ) {
-        TextField(
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(PrimaryEditable, true)
-                ,
-
-            value = textTyped,
-
-            placeholder = { Text(pendingLabel) },
-            onValueChange = {
-                if (it.length <= maxVoteLength) textTyped = it
-                else Toast.makeText(
-                    myContext,
-                    "Cannot be more than $maxVoteLength characters",
-                    Toast.LENGTH_SHORT
-                ).show()
-
-            },
-            singleLine = true,
-            trailingIcon = {
-
-                if (textTyped.isBlank()) {
-
-                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-
-                }
-                else{
-
-                    IconButton(
-                        onClick = {
-                            textTyped = ""
-                            focusManager.clearFocus()
-                            myVote = pendingLabel
-                            updateMyVote()
-
-                        }
-
-                    ) {
-                        Icon(
-
-                            painter = painterResource(id = R.drawable.ic_baseline_clear_24),
-                            contentDescription = "Clear",
-                            modifier = Modifier.size(30.dp),
-                        )
-                    }
-
-
-                }
-
-
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences),
-            keyboardActions = KeyboardActions(
-                onDone = {
-
-
-                    // Hide keyboard
-                    keyboardController?.hide()
-                    expanded = false
-                    focusManager.clearFocus()
-
-                    myVote = textTyped
-
-                    updateMyVote()
-
-                }
-            )
-        )
-
-        // filter options based on text field value
-
-        /*
-
-        if (filteringOptions.isNotEmpty()) {
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false},
-
-
-            ) {
-                filteringOptions.forEach { selectionOption ->
-
-                    DropdownMenuItem(
-                        text = {Text(text = selectionOption)},
-
-                        onClick = {
-                            textTyped = selectionOption
-
-                            // Hide keyboard
-                            keyboardController?.hide()
-                            expanded = false
-                            focusManager.clearFocus()
-
-                            myVote = textTyped
-                            updateMyVote()
-
-
-                        },
-
-                        )
-
-                }
-            }
-
-        }
-
-         */
-
-    }
-
- */
-
-/*
-
-val sortByVote = remember { mutableStateOf(true) }
-        // Sort icon
-        IconButton(onClick = {
-            voteDb.sortByVote = !voteDb.sortByVote
-            sortByVote.value = !sortByVote.value
-
-        }) {
-            Icon(
-                painter = if (sortByVote.value) painterResource(id = R.drawable.ic_baseline_favorite_border_24) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
-                contentDescription = "Change",
-                modifier = Modifier.size(30.dp)
-            )
-        }
-
- */
-
