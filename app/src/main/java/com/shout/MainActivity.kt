@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -115,7 +116,7 @@ class MainActivity : ComponentActivity() {
     private var myVote=""
 
     private var beaconVote: String="0"
-    private var beaconNearby: Boolean=false
+    // private var beaconNearby: Boolean=false
 
     val voteChannel = Channel<IdVote>(Channel.UNLIMITED)
 
@@ -293,18 +294,15 @@ class MainActivity : ComponentActivity() {
 
         if(myVote=="") return
 
-         // Log.d("###","======== broadcastUpdate")
+        // Log.d("###","== broadcastUpdate: $myVote")
 
         // Stop
         runBlocking {
-                // Log.d("###", " broadcastUpdate stop")
                 connectionsClient.stopAdvertising()
         }
 
         // Start
         runBlocking {
-
-                // Log.d("###","   broadcastUpdate start")
 
                 val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
 
@@ -439,9 +437,13 @@ class MainActivity : ComponentActivity() {
 
 
 
-    fun updateMyVote(){
-        runBlocking {tallyVotes()}
+    private fun updateMyVote(){
+
+        runBlocking {
+            tallyVotes()
+        }
         myUI()
+        broadcastUpdate()
     }
 
 
@@ -452,7 +454,6 @@ class MainActivity : ComponentActivity() {
         setContent {
 
             // Variables
-            // var tallyColor by remember { mutableStateOf(Color.Black) }
 
             var tallyColor: Color
 
@@ -584,12 +585,17 @@ class MainActivity : ComponentActivity() {
                                 horizontalArrangement = Arrangement.Absolute.Center
 
                             ){
+
+/*
                                 Text(
                                     //modifier = Modifier.fillMaxWidth(),
-                                    text =  (if (beaconNearby) "\u25CB\u25CF" else "\u25CF\u25CB"),
+                                    text =  (if (beaconNearby) "\u25C7" else "\u25C8"),
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     style = MaterialTheme.typography.headlineLarge,
                                 )
+
+ */
+
                             }
 
                         },
@@ -727,9 +733,11 @@ class MainActivity : ComponentActivity() {
                 override fun run() {
                     if (!timerScreenOn) {return}
                     runOnUiThread {
-                        updateMyVote()
-                        beaconNearby=!beaconNearby
-                        broadcastUpdate()
+                        runBlocking {
+                            tallyVotes()
+                        }
+                        myUI()
+                        // beaconNearby=!beaconNearby
                     }
                 }
             },
@@ -737,13 +745,15 @@ class MainActivity : ComponentActivity() {
             screenFreq
         )
 
-        // Recurring event to update Location
+        // Recurring event to update Location and Broadcast
         timerLoc.schedule(
 
             object : TimerTask() {
                 override fun run() {
                     if (!timerLocOn) {return}
-                    runOnUiThread {getLoc()}
+                    runOnUiThread {
+                        broadcastUpdate()
+                        getLoc()}
                 }
             },
             0,
