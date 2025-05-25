@@ -1,6 +1,5 @@
 package com.shout
 
-import com.shout.ui.theme.AppTheme
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
@@ -26,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
@@ -73,10 +71,14 @@ import com.google.android.gms.nearby.connection.ConnectionsClient
 import com.google.android.gms.nearby.connection.DiscoveredEndpointInfo
 import com.google.android.gms.nearby.connection.DiscoveryOptions
 import com.google.android.gms.nearby.connection.EndpointDiscoveryCallback
+import com.google.android.gms.nearby.connection.Payload
+import com.google.android.gms.nearby.connection.PayloadCallback
+import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
 import com.google.android.gms.tasks.CancellationToken
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.OnTokenCanceledListener
+import com.shout.ui.theme.AppTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
@@ -87,8 +89,8 @@ import java.util.TimerTask
 
 
 // CONSTANTS
-const val votesFreq: Long = 1 * 1000   //  1 sec
-const val screenFreq: Long = 5 * 1000   //  5 sec
+
+const val screenFreq: Long = 1 * 1000   //  1 sec
 const val locFreq: Long = 60 * 1000   //  1 min
 
 const val tooOldDuration: Long = 3 * 60   //  3 mins
@@ -101,8 +103,8 @@ class MainActivity : ComponentActivity() {
 
 
     // *******************  CLASSES   *******************
-    data class VoteToTallyFadeClass(val nVotes: Int, val vote: String, val ageFade: Float)
-    data class IdToVoteTimeClass(val vote: String, val timeStamp: Long)
+    // data class VoteToTallyFadeClass(val nVotes: Int, val vote: String, val ageFade: Float)
+    // data class IdToVoteTimeClass(val vote: String, val timeStamp: Long)
     data class IdVote(val id: String, val vote: String)
 
 
@@ -110,27 +112,28 @@ class MainActivity : ComponentActivity() {
 
     private var sortByVote: Boolean = true
     private var myId: String = ""
+    private var myVote=""
 
     var myLat: Double = 0.0
     var myLong: Double = 0.0
-    private var myVote=""
 
-    private var beaconVote: String="0"
+
+    // private var beaconVote: String="0"
     // private var beaconNearby: Boolean=false
 
     val voteChannel = Channel<IdVote>(Channel.UNLIMITED)
+    val pointChannel = Channel<IdVote>(Channel.UNLIMITED)
 
 
-    private val timerVotes = Timer(true)
     private val timerScreen = Timer(true)
-    private val timerLoc = Timer(true)
-
-    var timerVotesOn = true
     var timerScreenOn = true
+
+    private val timerLoc = Timer(true)
     var timerLocOn = true
 
 
-    private var idToVoteTime = mutableMapOf<String, IdToVoteTimeClass>()
+    private var idToVote = mutableMapOf<String, String>()
+    private var idToTime = mutableMapOf<String, Long>()
     private val mutexVote = Mutex()
 
     private val votesOutput = mutableListOf<VoteToTallyFadeClass>()
@@ -140,14 +143,41 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalCoroutinesApi::class)
     suspend fun addVotes(){
 
+        var lastVote:String
+
 
         while(!voteChannel.isEmpty){
 
+
             // tallyVotes may need to read the table in between updates
             mutexVote.withLock {
-                val it = voteChannel.receive()
 
-                // Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
+                val it = voteChannel.receive()
+                Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
+
+                idToTime[it.id] = System.currentTimeMillis()/1000
+
+                if(idToVote.containsKey(it.id)) {
+
+                    lastVote = idToVote[it.id].toString()
+                    if (it.vote != lastVote) {
+                        // todo
+                        // decrease counter for lastVote
+                        // add new vote to tally
+                    }
+                }
+                else{
+                    idToVote[it.id] = it.vote
+                    // add new vote to tally
+                }
+
+
+
+
+
+
+
+
                 if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
                 idToVoteTime[it.id] = IdToVoteTimeClass(
                     vote = it.vote,
@@ -160,7 +190,7 @@ class MainActivity : ComponentActivity() {
     private suspend fun tallyVotes() {
 
         val votesSummary: MutableMap<String, Int> = HashMap()
-        val votesTimestamp: MutableMap<String, Long> = HashMap()
+        // val votesTimestamp: MutableMap<String, Long> = HashMap()
         val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldDuration
 
         // This is the only section that needs to block the DB
@@ -232,9 +262,16 @@ class MainActivity : ComponentActivity() {
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
 
+            Log.d("###","Incoming from ${info.endpointName}")
+            connectionsClient.requestConnection(myId, endpointId, connectionLifecycleCallback)
+            Log.d("###","  requested connection")
+
+                /*
+
+
             val aInfo :  List<String> = info.endpointName.split("#")
 
-             // Log.d("###","Incoming from ${info.endpointName}")
+
 
             // Check if 5 fields were received
             if (aInfo.size != 5) {
@@ -270,6 +307,7 @@ class MainActivity : ComponentActivity() {
 
             // Add new vote
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
+*/
 
 
         }
@@ -277,9 +315,106 @@ class MainActivity : ComponentActivity() {
         override fun onEndpointLost(endpointId: String) {} //Log.d("###","Lost  $endpointId")
 
     }
+
+
+
+
+
+
+    private val payloadCallback: PayloadCallback = object : PayloadCallback() {
+        override fun onPayloadReceived(endpointId: String, payload: Payload) {
+
+            val p  = payload.asBytes().toString()
+            val aInfo :  List<String> = p.split("#")
+            Log.d("###","Received  aInfo: $aInfo")
+
+            // Check if 4 fields were received
+            if (aInfo.size != 4) {return}
+
+
+            val newId: String = aInfo[1]
+            val newLat: String = aInfo[2]
+            val newLong: String = aInfo[3]
+
+            val newLatD: Double = newLat.toDouble()
+            val newLongD: Double = newLong.toDouble()
+
+            // Warning if missing location
+            if(myLat == 0.toDouble()){
+            Toast.makeText(this@MainActivity, "Location settings error, using approximate values", Toast.LENGTH_LONG).show()
+            myLat = newLatD
+            myLong = newLongD
+            }
+
+            // Check if within max distance
+            val newDistance: FloatArray = floatArrayOf(0f)
+            Location.distanceBetween(newLatD,newLongD, myLat,myLong,newDistance)
+            if (newDistance[0] > maxDistance) return
+
+
+            val voteStart = newId.length + newLat.length + newLong.length + 5
+            val newVote: String = p.substring( voteStart, p.length)
+
+            // Check for empty strings
+            if(newId.isEmpty() or newVote.isEmpty()) return
+
+            // Add new vote
+            runBlocking {voteChannel.send(IdVote(newId,newVote))}
+
+
+
+
+        }
+
+        override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
+            /*
+            if (update.status == PayloadTransferUpdate.Status.SUCCESS
+                && myChoice != null && opponentChoice != null) {
+                val mc = myChoice!!
+                val oc = opponentChoice!!
+                when {
+                    mc.beats(oc) -> { // Win!
+                        binding.status.text = "${mc.name} beats ${oc.name}"
+                        myScore++
+                    }
+                    mc == oc -> { // Tie
+                        binding.status.text = "You both chose ${mc.name}"
+                    }
+                    else -> { // Loss
+                        binding.status.text = "${mc.name} loses to ${oc.name}"
+                        opponentScore++
+                    }
+                }
+                binding.score.text = "$myScore : $opponentScore"
+                myChoice = null
+                opponentChoice = null
+                setGameControllerEnabled(true)
+            }
+
+
+             */
+        }
+    }
+
+
+
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
 
-        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {} //Log.d("###","Incoming from ${info.endpointName}")
+        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
+
+            Log.d("###","Incoming from ${info.endpointName}")
+
+            connectionsClient.acceptConnection(endpointId, payloadCallback);
+
+
+        }
+
+
+
+
+
+
+
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {} //Log.d("###","Result  $endpointId")
         override fun onDisconnected(endpointId: String) {} // Log.d("###","Disconnected  $endpointId")
 
@@ -294,28 +429,13 @@ class MainActivity : ComponentActivity() {
 
         if(myVote=="") return
 
-        // Log.d("###","== broadcastUpdate: $myVote")
+        Log.d("###","== broadcastUpdate: $myVote")
 
-        // Stop
-        runBlocking {
-                connectionsClient.stopAdvertising()
-        }
-
-        // Start
-        runBlocking {
-
-                val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
-
-                beaconVote = if (beaconVote=="0") {"1"} else{"0"}
-
-                connectionsClient.startAdvertising(
-                    "$beaconVote#$myId#$myLat#$myLong#$myVote",
-                    packageName,
-                    connectionLifecycleCallback,
-                    advertisingOptions
-                )
-        }
-
+        connectionsClient.sendPayload(
+            // todo
+            "TEMP_ALL_POINTS",
+            Payload.fromBytes("$myId#$myLat#$myLong#$myVote".toByteArray())
+        )
     }
 
     // Independent Functions
@@ -531,7 +651,8 @@ class MainActivity : ComponentActivity() {
                                                     focusManager.clearFocus()
                                                     true
                                                 } else {
-                                                    false }
+                                                    false
+                                                }
                                             },
 
                                         value = textTyped,
@@ -711,33 +832,25 @@ class MainActivity : ComponentActivity() {
         connectionsClient = Nearby.getConnectionsClient(this)
 
 
-        // Recurring event to process incoming votes
-        timerVotes.schedule(
 
-            object : TimerTask() {
-                override fun run() {
-                    if (!timerVotesOn) {return}
-                    runOnUiThread {
-                        runBlocking {addVotes()}
-                    }
-                }
-            },
-            0,
-            votesFreq
-        )
 
-        // Recurring event to update Screen
+        // Recurring event to update Screen & Broadcast
         timerScreen.schedule(
             object : TimerTask() {
 
                 override fun run() {
                     if (!timerScreenOn) {return}
                     runOnUiThread {
+
+                        runBlocking {addVotes()}
+
                         runBlocking {
                             tallyVotes()
                         }
+
+                        broadcastUpdate()
                         myUI()
-                        // beaconNearby=!beaconNearby
+
                     }
                 }
             },
@@ -745,14 +858,13 @@ class MainActivity : ComponentActivity() {
             screenFreq
         )
 
-        // Recurring event to update Location and Broadcast
+        // Recurring event to update Location
         timerLoc.schedule(
 
             object : TimerTask() {
                 override fun run() {
                     if (!timerLocOn) {return}
                     runOnUiThread {
-                        broadcastUpdate()
                         getLoc()}
                 }
             },
@@ -772,8 +884,15 @@ class MainActivity : ComponentActivity() {
         timerLocOn = true
 
         val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
-
         connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
+
+        val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
+        connectionsClient.startAdvertising(
+            myId,
+            packageName,
+            connectionLifecycleCallback,
+            advertisingOptions
+        )
 
 
     }
@@ -828,7 +947,7 @@ class MainActivity : ComponentActivity() {
 
         // Log.d("###"," onDestroy")
 
-        timerVotes.cancel()
+
         timerScreen.cancel()
         timerLoc.cancel()
 
