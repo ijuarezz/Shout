@@ -88,8 +88,8 @@ import kotlin.collections.set
 
 
 // *******************  CONSTANTS   *******************
-
-const val screenFreq: Long = 1 * 1000   //  1 sec
+const val screenFreq: Long = 5 * 1000   //  5 sec
+//const val screenFreq: Long = 1 * 1000   //  1 sec
 const val locFreq: Long = 60 * 1000   //  1 min
 
 const val tooOldDuration: Long = 3 * 60   //  3 mins
@@ -161,23 +161,19 @@ class MainActivity() : ComponentActivity() {
         }
 
 
-        // add my vote
-        if(myVote!="") {
-            idToVote["Me"] = myVote
-            idToTime["Me"] = System.currentTimeMillis() / 1000
-        }
-
         // update endpoints
         while(!pointChannel.isEmpty){
             val it = pointChannel.receive()
 
             if(it.substring(0,1)=="+") {
-                pointsList.add(it.substring(1,it.length-1))
-            }
+                Log.d("###", "======== addVotes  adding $it ")
+                pointsList.add(it.substring(1,it.length))
+                            }
             else{
-                pointsList.remove(it.substring(1,it.length-1))
+                Log.d("###", "======== addVotes  removing $it ")
+                pointsList.remove(it.substring(1,it.length))
             }
-            Log.d("###", "======== VoteDbClass  adding $it ")
+
         }
 
         // todo
@@ -185,17 +181,21 @@ class MainActivity() : ComponentActivity() {
         while(!voteChannel.isEmpty){
 
             val it = voteChannel.receive()
-            Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
+            Log.d("###", "======== addVotes  processing ${it.id} ${it.vote} ")
 
             idToTime[it.id] = System.currentTimeMillis()/1000
+
 
             if(idToVote.containsKey(it.id)) {
 
                 lastVote = idToVote[it.id].toString()
+
                 if (it.vote != lastVote) {
 
                     // decrease counter for lastVote
+
                     lastVoteCount = (votesSummary[lastVote]?:0)-1
+                    Log.d("###", "======== addVotes  lastVote $lastVote    it.vote  ${it.vote}  lastVoteCount $lastVoteCount ")
                     if(lastVoteCount>0) {
                         votesSummary[lastVote] = lastVoteCount
                     }
@@ -218,6 +218,10 @@ class MainActivity() : ComponentActivity() {
 
 
         }
+
+        Log.d("###", "======== addVotes  idToVote is $idToVote")
+        Log.d("###", "======== addVotes  idToTime is $idToTime")
+        Log.d("###", "======== addVotes  votesSummary is $votesSummary")
     }
 
 
@@ -226,7 +230,7 @@ class MainActivity() : ComponentActivity() {
 
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
 
-            Log.d("###","Incoming from ${info.endpointName}")
+            Log.d("###","onConnectionInitiated from ${info.endpointName}")
 
             connectionsClient.acceptConnection(endpointId, payloadCallback)
 
@@ -246,7 +250,7 @@ class MainActivity() : ComponentActivity() {
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-            Log.d("###","Incoming from ${info.endpointName}")
+            Log.d("###","onEndpointFound from ${info.endpointName}")
             connectionsClient.requestConnection(myId, endpointId, connectionLifecycleCallback)
             runBlocking {pointChannel.send("+$endpointId")}
 
@@ -336,9 +340,11 @@ class MainActivity() : ComponentActivity() {
     @SuppressLint("MissingPermission")
     fun broadcastUpdate() {
 
+        // Log.d("###","== broadcastUpdate myVote $myVote")
+        // Log.d("###","== broadcastUpdate pointsList $pointsList")
         if ((myVote=="") || pointsList.isEmpty()) {return}
 
-        Log.d("###","== broadcastUpdate: $myVote")
+        // Log.d("###","== broadcastUpdate: $myVote")
 
         connectionsClient.sendPayload(
             pointsList,
@@ -495,7 +501,6 @@ class MainActivity() : ComponentActivity() {
         setContent {
 
             // Variables
-
             var tallyColor: Color
 
             val focusRequester = remember { FocusRequester() }
@@ -514,7 +519,7 @@ class MainActivity() : ComponentActivity() {
                 if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toList()
                 else votesSummary.toList().sortedBy { (k, _) -> k }.toList()
 
-
+            Log.d("###","myUI    votesSorted   $votesSorted")
 
             AppTheme {
 
@@ -612,6 +617,19 @@ class MainActivity() : ComponentActivity() {
                                                 keyboardController?.hide()
                                                 focusManager.clearFocus()
                                                 myVote = textTyped.trim()
+                                                //todo
+                                                // don't send, go back to adding ?
+                                                /*
+                                                if(myVote!="") {
+                                                    idToVote["Me"] = myVote
+                                                    idToTime["Me"] = System.currentTimeMillis() / 1000
+                                                }
+                                                */
+                                                runBlocking {voteChannel.send(IdVote("Me",myVote))}
+
+
+
+
                                                 textTyped=""
                                                 broadcastUpdate()
                                             }
@@ -655,6 +673,7 @@ class MainActivity() : ComponentActivity() {
                                         colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
                                         onClick = {
                                                 myVote = eachTally.first
+                                                //todo send
                                                 broadcastUpdate()
                                         },
 
