@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
@@ -44,7 +45,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -82,13 +82,12 @@ import com.shout.ui.theme.AppTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import java.util.Timer
 import java.util.TimerTask
+import kotlin.collections.set
 
 
-// CONSTANTS
+// *******************  CONSTANTS   *******************
 
 const val screenFreq: Long = 1 * 1000   //  1 sec
 const val locFreq: Long = 60 * 1000   //  1 min
@@ -99,44 +98,47 @@ const val maxVoteLength: Int = 30   // 30 chars
 
 
 
-class MainActivity : ComponentActivity() {
+class MainActivity() : ComponentActivity() {
 
 
     // *******************  CLASSES   *******************
-    // data class VoteToTallyFadeClass(val nVotes: Int, val vote: String, val ageFade: Float)
-    // data class IdToVoteTimeClass(val vote: String, val timeStamp: Long)
     data class IdVote(val id: String, val vote: String)
 
-
     // *******************  VARIABLES   *******************
-
-    private var sortByVote: Boolean = true
+    var myLat: Double = 0.0
+    var myLong: Double = 0.0
     private var myId: String = ""
     private var myVote=""
 
-    var myLat: Double = 0.0
-    var myLong: Double = 0.0
+    private var fusedLocationClient: FusedLocationProviderClient? = null
+    private val strategy = Strategy.P2P_CLUSTER
+    private lateinit var connectionsClient: ConnectionsClient
 
 
-    // private var beaconVote: String="0"
-    // private var beaconNearby: Boolean=false
+    // *******************  BOOLEANS   *******************
+    private var sortByVote: Boolean = true
 
+    // todo
+    // mutex for Loc ?
+
+    // *******************  CHANNELS   *******************
     val voteChannel = Channel<IdVote>(Channel.UNLIMITED)
-    val pointChannel = Channel<IdVote>(Channel.UNLIMITED)
+    val pointChannel = Channel<String>(Channel.UNLIMITED)
 
 
+    // *******************  TIMERS   *******************
     private val timerScreen = Timer(true)
     var timerScreenOn = true
 
     private val timerLoc = Timer(true)
     var timerLocOn = true
 
-
+    // *******************  TABLES   *******************
     private var idToVote = mutableMapOf<String, String>()
     private var idToTime = mutableMapOf<String, Long>()
-    private val mutexVote = Mutex()
+    val votesSummary: MutableMap<String, Int> = HashMap()
+    val pointsList = mutableListOf<String>()
 
-    private val votesOutput = mutableListOf<VoteToTallyFadeClass>()
 
     // *******************  FUNCTIONS   *******************
 
@@ -144,189 +146,123 @@ class MainActivity : ComponentActivity() {
     suspend fun addVotes(){
 
         var lastVote:String
-
-
-        while(!voteChannel.isEmpty){
-
-
-            // tallyVotes may need to read the table in between updates
-            mutexVote.withLock {
-
-                val it = voteChannel.receive()
-                Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
-
-                idToTime[it.id] = System.currentTimeMillis()/1000
-
-                if(idToVote.containsKey(it.id)) {
-
-                    lastVote = idToVote[it.id].toString()
-                    if (it.vote != lastVote) {
-                        // todo
-                        // decrease counter for lastVote
-                        // add new vote to tally
-                    }
-                }
-                else{
-                    idToVote[it.id] = it.vote
-                    // add new vote to tally
-                }
-
-
-
-
-
-
-
-
-                if (idToVoteTime.containsKey(it.id)) idToVoteTime.remove(it.id)
-                idToVoteTime[it.id] = IdToVoteTimeClass(
-                    vote = it.vote,
-                    timeStamp = System.currentTimeMillis()/1000
-                )
-            }
-        }
-    }
-
-    private suspend fun tallyVotes() {
-
-        val votesSummary: MutableMap<String, Int> = HashMap()
-        // val votesTimestamp: MutableMap<String, Long> = HashMap()
+        var lastVoteCount: Int
         val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldDuration
 
-        // This is the only section that needs to block the DB
-        mutexVote.withLock {
+        //delete old entries by time first
+        val iterator = idToTime.iterator()
+        while (iterator.hasNext()) {
+            val thisVote = iterator.next()
 
-            //delete old entries by time first
-            val iterator = idToVoteTime.iterator()
-            while (iterator.hasNext()) {
-                val thisVote = iterator.next()
-                if (thisVote.value.timeStamp < tooOld) {
-                    iterator.remove()
+            if (thisVote.value < tooOld) {  // remove vote & timestamp
+                idToVote.remove(thisVote.key)
+                iterator.remove()
+            }
+        }
+
+
+        // add my vote
+        if(myVote!="") {
+            idToVote["Me"] = myVote
+            idToTime["Me"] = System.currentTimeMillis() / 1000
+        }
+
+        // update endpoints
+        while(!pointChannel.isEmpty){
+            val it = pointChannel.receive()
+
+            if(it.substring(0,1)=="+") {
+                pointsList.add(it.substring(1,it.length-1))
+            }
+            else{
+                pointsList.remove(it.substring(1,it.length-1))
+            }
+            Log.d("###", "======== VoteDbClass  adding $it ")
+        }
+
+        // todo
+        // may be running for more than 1 sec
+        while(!voteChannel.isEmpty){
+
+            val it = voteChannel.receive()
+            Log.d("###", "======== VoteDbClass  adding ${it.id} ${it.vote} ")
+
+            idToTime[it.id] = System.currentTimeMillis()/1000
+
+            if(idToVote.containsKey(it.id)) {
+
+                lastVote = idToVote[it.id].toString()
+                if (it.vote != lastVote) {
+
+                    // decrease counter for lastVote
+                    lastVoteCount = (votesSummary[lastVote]?:0)-1
+                    if(lastVoteCount>0) {
+                        votesSummary[lastVote] = lastVoteCount
+                    }
+                    else{  // or delete it
+                        idToVote.remove(lastVote)
+                        idToTime.remove(lastVote)
+                    }
+
+
+                    // add new vote to tally
+                    votesSummary[it.vote] = (votesSummary[it.vote]?:0) + 1  // change null to 0
                 }
             }
+            else{
+                idToVote[it.id] = it.vote
 
-
-            // add my vote
-            if(myVote!=""){
-                idToVoteTime["Me"] = IdToVoteTimeClass(
-                    vote = myVote,
-                    timeStamp = System.currentTimeMillis()/1000
-                )
-    }
-
-
-            // tally votes
-            for (thisVote in idToVoteTime) {
-                val v = thisVote.value.vote
-                votesSummary[v] = (votesSummary[v]?:0) + 1  // change null to 0
-                votesTimestamp[v] =  (votesTimestamp[v] ?:0)  + (thisVote.value.timeStamp - tooOld)   // accumulating ages in seconds
+                // add new vote to tally
+                votesSummary[it.vote] = (votesSummary[it.vote]?:0) + 1  // change null to 0
             }
+
+
         }
-
-
-        // sort by either votes or alphabetically
-        val votesSorted: Map<String, Int> =
-
-            if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toMap()
-            else votesSummary.toList().sortedBy { (k, _) -> k }.toMap()
-
-        // fade based on time
-        var ageFade: Float
-        votesOutput.clear()
-
-        for (thisVote in votesSorted) {
-
-            val avgTimestamp = (votesTimestamp[thisVote.key] ?: 0L)/ thisVote.value  //  average age = (sum of ages) / (sum of votes)
-
-            ageFade = avgTimestamp.toFloat() / tooOldDuration.toFloat()  // how old the vote is expressed as 0-100%
-            ageFade = (ageFade * 0.8f)+0.2f  // controls transparency but in the 20-100% range
-
-            votesOutput.add(
-                VoteToTallyFadeClass(
-                    nVotes = thisVote.value,
-                    vote = thisVote.key,
-                    ageFade = ageFade
-                )
-            )
-        }
-
-
     }
 
 
+    // *******************  NEARBY   *******************
+    private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
 
-    // Nearby & Location
-    private val strategy = Strategy.P2P_CLUSTER
-    private lateinit var connectionsClient: ConnectionsClient
+        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
+
+            Log.d("###","Incoming from ${info.endpointName}")
+
+            connectionsClient.acceptConnection(endpointId, payloadCallback)
+
+
+        }
+
+
+
+
+
+
+
+        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {} //Log.d("###","Result  $endpointId")
+        override fun onDisconnected(endpointId: String) {} // Log.d("###","Disconnected  $endpointId")
+
+    }
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-
             Log.d("###","Incoming from ${info.endpointName}")
             connectionsClient.requestConnection(myId, endpointId, connectionLifecycleCallback)
-            Log.d("###","  requested connection")
-
-                /*
-
-
-            val aInfo :  List<String> = info.endpointName.split("#")
-
-
-
-            // Check if 5 fields were received
-            if (aInfo.size != 5) {
-                 // Log.d("###","Received ${aInfo.size} instead of 5 fields received. aInfo: $aInfo")
-                return
-            }
-
-            val newId: String = aInfo[1]
-            val newLat: String = aInfo[2]
-            val newLong: String = aInfo[3]
-
-            val newLatD: Double = newLat.toDouble()
-            val newLongD: Double = newLong.toDouble()
-
-            // Warning if missing location
-            if(myLat == 0.toDouble()){
-                Toast.makeText(this@MainActivity, "Location settings error, using approximate values", Toast.LENGTH_LONG).show()
-                myLat = newLatD
-                myLong = newLongD
-            }
-
-            // Check if within max distance
-            val newDistance: FloatArray = floatArrayOf(0f)
-            Location.distanceBetween(newLatD,newLongD, myLat,myLong,newDistance)
-            if (newDistance[0] > maxDistance) return
-
-
-            val voteStart = newId.length + newLat.length + newLong.length + 5
-            val newVote: String = info.endpointName.substring( voteStart, info.endpointName.length)
-
-            // Check for empty strings
-            if(newId.isEmpty() or newVote.isEmpty()) return
-
-            // Add new vote
-            runBlocking {voteChannel.send(IdVote(newId,newVote))}
-*/
-
+            runBlocking {pointChannel.send("+$endpointId")}
 
         }
-
-        override fun onEndpointLost(endpointId: String) {} //Log.d("###","Lost  $endpointId")
-
+        override fun onEndpointLost(endpointId: String) {
+            Log.d("###","Lost  $endpointId")
+            runBlocking {pointChannel.send("-$endpointId")}
+        }
     }
-
-
-
-
-
 
     private val payloadCallback: PayloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
 
             val p  = payload.asBytes().toString()
             val aInfo :  List<String> = p.split("#")
-            Log.d("###","Received  aInfo: $aInfo")
+            Log.d("###","onPayloadReceived  aInfo: $aInfo")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) {return}
@@ -360,13 +296,10 @@ class MainActivity : ComponentActivity() {
 
             // Add new vote
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
-
-
-
-
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
+            Log.d("###","onPayloadTransferUpdate  endpointId: $endpointId")
             /*
             if (update.status == PayloadTransferUpdate.Status.SUCCESS
                 && myChoice != null && opponentChoice != null) {
@@ -398,49 +331,35 @@ class MainActivity : ComponentActivity() {
 
 
 
-    private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
-
-        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-
-            Log.d("###","Incoming from ${info.endpointName}")
-
-            connectionsClient.acceptConnection(endpointId, payloadCallback);
-
-
-        }
-
-
-
-
-
-
-
-        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {} //Log.d("###","Result  $endpointId")
-        override fun onDisconnected(endpointId: String) {} // Log.d("###","Disconnected  $endpointId")
-
-    }
-
-    private var fusedLocationClient: FusedLocationProviderClient? = null
-
-    //Nearby functions
+    // *******************  COMMS   *******************
 
     @SuppressLint("MissingPermission")
     fun broadcastUpdate() {
 
-        if(myVote=="") return
+        if ((myVote=="") || pointsList.isEmpty()) {return}
 
         Log.d("###","== broadcastUpdate: $myVote")
 
         connectionsClient.sendPayload(
-            // todo
-            "TEMP_ALL_POINTS",
+            pointsList,
             Payload.fromBytes("$myId#$myLat#$myLong#$myVote".toByteArray())
         )
     }
 
-    // Independent Functions
+    fun stopAll(){
+
+        timerScreen.cancel()
+        timerLoc.cancel()
+
+        connectionsClient.stopAdvertising()
+        connectionsClient.stopAllEndpoints()
+        connectionsClient.stopDiscovery()
 
 
+    }
+
+
+    // *******************  FUNCTIONS   *******************
     @SuppressLint("MissingPermission")
     private fun getLoc(){
 
@@ -463,7 +382,6 @@ class MainActivity : ComponentActivity() {
             }
 
     }
-
 
     private fun checkPermissions() {
 
@@ -554,21 +472,24 @@ class MainActivity : ComponentActivity() {
 
     }
 
+    public override fun onSaveInstanceState(savedInstanceState: Bundle) {
+        super.onSaveInstanceState(savedInstanceState)
+        savedInstanceState.putString("myId", myId)
+        savedInstanceState.putString("myVote", myVote)
 
 
-
-    private fun updateMyVote(){
-
-        runBlocking {
-            tallyVotes()
-        }
-        myUI()
-        broadcastUpdate()
     }
 
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
 
+        myId = savedInstanceState.getString("myId").toString()
+        myVote = savedInstanceState.getString("myVote").toString()
 
-    // UI
+    }
+
+    // *******************  UI   *******************
+
     private fun myUI() {
 
         setContent {
@@ -578,7 +499,7 @@ class MainActivity : ComponentActivity() {
             var tallyColor: Color
 
             val focusRequester = remember { FocusRequester() }
-            val mySortByVote = remember { mutableStateOf(true) }
+            val mySortByVote = rememberSaveable { mutableStateOf(true) }
 
 
             var textTyped by rememberSaveable { mutableStateOf("") }
@@ -586,6 +507,13 @@ class MainActivity : ComponentActivity() {
             val keyboardController = LocalSoftwareKeyboardController.current
             val focusManager = LocalFocusManager.current
             val myContext = LocalContext.current
+
+
+            // sort by either votes or alphabetically
+            var votesSorted =
+                if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toList()
+                else votesSummary.toList().sortedBy { (k, _) -> k }.toList()
+
 
 
             AppTheme {
@@ -599,7 +527,7 @@ class MainActivity : ComponentActivity() {
 
 
                     Scaffold(
-                        modifier = Modifier.padding(all = 18.dp),
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 30.dp),
                         topBar = {
 
                             tallyColor = if(myVote == ""){
@@ -685,7 +613,7 @@ class MainActivity : ComponentActivity() {
                                                 focusManager.clearFocus()
                                                 myVote = textTyped.trim()
                                                 textTyped=""
-                                                updateMyVote()
+                                                broadcastUpdate()
                                             }
                                         ),
 
@@ -706,17 +634,6 @@ class MainActivity : ComponentActivity() {
                                 horizontalArrangement = Arrangement.Absolute.Center
 
                             ){
-
-/*
-                                Text(
-                                    //modifier = Modifier.fillMaxWidth(),
-                                    text =  (if (beaconNearby) "\u25C7" else "\u25C8"),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    style = MaterialTheme.typography.headlineLarge,
-                                )
-
- */
-
                             }
 
                         },
@@ -726,27 +643,24 @@ class MainActivity : ComponentActivity() {
                                 contentPadding = paddingValues,
                                 modifier = Modifier.background(MaterialTheme.colorScheme.background)
                             ) {
-                    //            items(tallyList) { eachTally ->
-                                 items(votesOutput) { eachTally ->
-                                    tallyColor = if(myVote == eachTally.vote){
+
+                                 items(votesSorted.toList()) { eachTally ->
+                                    tallyColor = if(myVote == eachTally.first){
                                         MaterialTheme.colorScheme.primaryContainer
                                     } else{
                                         MaterialTheme.colorScheme.surfaceVariant
                                     }
 
-                                    tallyColor = Color(tallyColor.red,tallyColor.green, tallyColor.blue, eachTally.ageFade,tallyColor.colorSpace)
-
                                     Card(
                                         colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
                                         onClick = {
-                                                myVote = eachTally.vote
-                                                updateMyVote()
+                                                myVote = eachTally.first
+                                                broadcastUpdate()
                                         },
 
                                         modifier = Modifier
                                             .padding(horizontal = 16.dp, vertical = 4.dp)
                                             .fillMaxWidth()
-                                            .alpha(eachTally.ageFade)
 
                                     ) {
 
@@ -759,7 +673,7 @@ class MainActivity : ComponentActivity() {
                                         ) {
 
                                             Text(
-                                                text = eachTally.nVotes.toString(),
+                                                text = eachTally.second.toString(),
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                 modifier = Modifier.padding(all = 9.dp),
                                                 maxLines = Int.MAX_VALUE,
@@ -774,7 +688,7 @@ class MainActivity : ComponentActivity() {
                                             */
 
                                             Text(
-                                                text = eachTally.vote,
+                                                text = eachTally.first,
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                 modifier = Modifier.padding(all = 9.dp),
                                                 maxLines = Int.MAX_VALUE,
@@ -794,7 +708,7 @@ class MainActivity : ComponentActivity() {
                                 onClick = {
                                     sortByVote = !sortByVote
                                     mySortByVote.value = !mySortByVote.value
-                                    updateMyVote()
+                                    // broadcastUpdate()   todo   needed ?
 
                                     }
                             ) {
@@ -818,20 +732,31 @@ class MainActivity : ComponentActivity() {
 
     }
 
-    // Activity Lifecycle
+    // *******************  LIFECYCLE   *******************
 
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        Log.d("###"," onCreate")
         checkPermissions()
-
         getMyPreferences()
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         connectionsClient = Nearby.getConnectionsClient(this)
 
+        // start Discovery
+        val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
+        connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
 
+        // start Advertising
+        val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
+        connectionsClient.startAdvertising(
+            myId,
+            packageName,
+            connectionLifecycleCallback,
+            advertisingOptions
+        )
 
 
         // Recurring event to update Screen & Broadcast
@@ -841,16 +766,9 @@ class MainActivity : ComponentActivity() {
                 override fun run() {
                     if (!timerScreenOn) {return}
                     runOnUiThread {
-
                         runBlocking {addVotes()}
-
-                        runBlocking {
-                            tallyVotes()
-                        }
-
                         broadcastUpdate()
                         myUI()
-
                     }
                 }
             },
@@ -878,66 +796,30 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        // Log.d("###"," onResume")
+        Log.d("###"," onResume")
 
         timerScreenOn = true
         timerLocOn = true
-
-        val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
-        connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
-
-        val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
-        connectionsClient.startAdvertising(
-            myId,
-            packageName,
-            connectionLifecycleCallback,
-            advertisingOptions
-        )
-
-
-    }
-
-    public override fun onSaveInstanceState(savedInstanceState: Bundle) {
-        super.onSaveInstanceState(savedInstanceState)
-        savedInstanceState.putString("myId", myId)
-        savedInstanceState.putString("myVote", myVote)
-
-
-    }
-
-    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
-        super.onRestoreInstanceState(savedInstanceState)
-
-        myId = savedInstanceState.getString("myId").toString()
-        myVote = savedInstanceState.getString("myVote").toString()
 
     }
 
     @CallSuper
     override fun onPause() {
 
-        // Log.d("###"," onPause")
+        Log.d("###"," onPause")
 
         timerScreenOn = false
         timerLocOn = false
-
-        connectionsClient.stopAdvertising()
 
         super.onPause()
 
     }
 
-
     @CallSuper
     override fun onStop() {
 
-
-        // Log.d("###"," onStop")
-
-        timerScreenOn = false
-        timerLocOn = false
-
-        connectionsClient.stopAdvertising()
+        Log.d("###"," onStop")
+        stopAll()
 
         super.onStop()
     }
@@ -945,14 +827,8 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onDestroy() {
 
-        // Log.d("###"," onDestroy")
-
-
-        timerScreen.cancel()
-        timerLoc.cancel()
-
-        connectionsClient.stopAllEndpoints()
-        connectionsClient.stopDiscovery()
+        Log.d("###"," onDestroy")
+        stopAll()
 
         super.onDestroy()
     }
