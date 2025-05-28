@@ -84,7 +84,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import java.util.Timer
 import java.util.TimerTask
-import kotlin.collections.set
 
 
 // *******************  CONSTANTS   *******************
@@ -143,11 +142,13 @@ class MainActivity() : ComponentActivity() {
     // *******************  FUNCTIONS   *******************
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    suspend fun addVotes(){
+    suspend fun process(){
 
         var lastVote:String
         var lastVoteCount: Int
         val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldDuration
+
+        broadcastUpdate()
 
         //delete old entries by time first
         val iterator = idToTime.iterator()
@@ -219,9 +220,11 @@ class MainActivity() : ComponentActivity() {
 
         }
 
-        Log.d("###", "======== addVotes  idToVote is $idToVote")
-        Log.d("###", "======== addVotes  idToTime is $idToTime")
-        Log.d("###", "======== addVotes  votesSummary is $votesSummary")
+        myUI()
+
+        // Log.d("###", "======== addVotes  idToVote is $idToVote")
+        // Log.d("###", "======== addVotes  idToTime is $idToTime")
+        // Log.d("###", "======== addVotes  votesSummary is $votesSummary")
     }
 
 
@@ -243,8 +246,12 @@ class MainActivity() : ComponentActivity() {
 
 
 
-        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {} //Log.d("###","Result  $endpointId")
-        override fun onDisconnected(endpointId: String) {} // Log.d("###","Disconnected  $endpointId")
+        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
+            Log.d("###","Result  $endpointId")
+        }
+        override fun onDisconnected(endpointId: String) {
+            Log.d("###","Disconnected  $endpointId")
+        }
 
     }
 
@@ -256,7 +263,7 @@ class MainActivity() : ComponentActivity() {
 
         }
         override fun onEndpointLost(endpointId: String) {
-            Log.d("###","Lost  $endpointId")
+            Log.d("###","onEndpointLost  $endpointId")
             runBlocking {pointChannel.send("-$endpointId")}
         }
     }
@@ -264,9 +271,21 @@ class MainActivity() : ComponentActivity() {
     private val payloadCallback: PayloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
 
-            val p  = payload.asBytes().toString()
+
+            val p  = payload.asBytes()
+
+            Log.d("###","onPayload     Received  p: $p")
+            Log.d("###","onPayload     Received  p as string: ${p.toString()}")
+
+            /*
+
+
             val aInfo :  List<String> = p.split("#")
-            Log.d("###","onPayloadReceived  aInfo: $aInfo")
+
+            Log.d("###","onPayload     Received  payload: $payload")
+            Log.d("###","onPayload     Received  payload.asBytes(): ${payload.asBytes()}")
+            Log.d("###","onPayload     Received  p: $p")
+            Log.d("###","onPayload     Received  aInfo ${aInfo}")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) {return}
@@ -275,6 +294,10 @@ class MainActivity() : ComponentActivity() {
             val newId: String = aInfo[1]
             val newLat: String = aInfo[2]
             val newLong: String = aInfo[3]
+
+            Log.d("###","onPayload     newId  $newId")
+            Log.d("###","onPayload     newLat  $newLat")
+            Log.d("###","onPayload     newLong  $newLong")
 
             val newLatD: Double = newLat.toDouble()
             val newLongD: Double = newLong.toDouble()
@@ -291,6 +314,7 @@ class MainActivity() : ComponentActivity() {
             Location.distanceBetween(newLatD,newLongD, myLat,myLong,newDistance)
             if (newDistance[0] > maxDistance) return
 
+            Log.d("###","onPayload     after checking distance")
 
             val voteStart = newId.length + newLat.length + newLong.length + 5
             val newVote: String = p.substring( voteStart, p.length)
@@ -300,10 +324,13 @@ class MainActivity() : ComponentActivity() {
 
             // Add new vote
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
+
+             */
+
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            Log.d("###","onPayloadTransferUpdate  endpointId: $endpointId")
+            // Log.d("###","onPayload  TransferUpdate  endpointId: $endpointId")
             /*
             if (update.status == PayloadTransferUpdate.Status.SUCCESS
                 && myChoice != null && opponentChoice != null) {
@@ -340,15 +367,18 @@ class MainActivity() : ComponentActivity() {
     @SuppressLint("MissingPermission")
     fun broadcastUpdate() {
 
-        // Log.d("###","== broadcastUpdate myVote $myVote")
-        // Log.d("###","== broadcastUpdate pointsList $pointsList")
-        if ((myVote=="") || pointsList.isEmpty()) {return}
+        val p = "$myId#$myLat#$myLong#$myVote"
+        Log.d("###","== broadcastUpdate: $myVote  $p")
 
-        // Log.d("###","== broadcastUpdate: $myVote")
+        //val bytesPayload = Payload.fromBytes(p.toByteArray())
+        val bytesPayload = Payload.fromBytes(byteArrayOf(0xa, 0xb, 0xc, 0xd))
+
+        // if ((myVote=="") || pointsList.isEmpty()) {return}
+        if (pointsList.isEmpty()) {return}
 
         connectionsClient.sendPayload(
             pointsList,
-            Payload.fromBytes("$myId#$myLat#$myLong#$myVote".toByteArray())
+            bytesPayload
         )
     }
 
@@ -617,21 +647,9 @@ class MainActivity() : ComponentActivity() {
                                                 keyboardController?.hide()
                                                 focusManager.clearFocus()
                                                 myVote = textTyped.trim()
-                                                //todo
-                                                // don't send, go back to adding ?
-                                                /*
-                                                if(myVote!="") {
-                                                    idToVote["Me"] = myVote
-                                                    idToTime["Me"] = System.currentTimeMillis() / 1000
-                                                }
-                                                */
+
                                                 runBlocking {voteChannel.send(IdVote("Me",myVote))}
-
-
-
-
                                                 textTyped=""
-                                                broadcastUpdate()
                                             }
                                         ),
 
@@ -673,8 +691,6 @@ class MainActivity() : ComponentActivity() {
                                         colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
                                         onClick = {
                                                 myVote = eachTally.first
-                                                //todo send
-                                                broadcastUpdate()
                                         },
 
                                         modifier = Modifier
@@ -727,8 +743,6 @@ class MainActivity() : ComponentActivity() {
                                 onClick = {
                                     sortByVote = !sortByVote
                                     mySortByVote.value = !mySortByVote.value
-                                    // broadcastUpdate()   todo   needed ?
-
                                     }
                             ) {
 
@@ -785,9 +799,7 @@ class MainActivity() : ComponentActivity() {
                 override fun run() {
                     if (!timerScreenOn) {return}
                     runOnUiThread {
-                        runBlocking {addVotes()}
-                        broadcastUpdate()
-                        myUI()
+                        runBlocking {process()}
                     }
                 }
             },
