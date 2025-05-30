@@ -167,11 +167,11 @@ class MainActivity() : ComponentActivity() {
             val it = pointChannel.receive()
 
             if(it.substring(0,1)=="+") {
-                Log.d("###", "======== addVotes  adding $it ")
+                // Log.d("###", "======== endpoints  adding $it ")
                 pointsList.add(it.substring(1,it.length))
                             }
             else{
-                Log.d("###", "======== addVotes  removing $it ")
+                // Log.d("###", "======== endpoints  removing $it ")
                 pointsList.remove(it.substring(1,it.length))
             }
 
@@ -182,7 +182,7 @@ class MainActivity() : ComponentActivity() {
         while(!voteChannel.isEmpty){
 
             val it = voteChannel.receive()
-            // Log.d("###", "======== addVotes  processing ${it.id} ${it.vote} ")
+            Log.d("###", "======== addVotes  processing ${it.id} ${it.vote} ")
 
             idToTime[it.id] = System.currentTimeMillis()/1000
 
@@ -196,17 +196,22 @@ class MainActivity() : ComponentActivity() {
                     // decrease counter for lastVote
 
                     lastVoteCount = (votesSummary[lastVote]?:0)-1
-                    // Log.d("###", "======== addVotes  lastVote $lastVote    it.vote  ${it.vote}  lastVoteCount $lastVoteCount ")
+                    Log.d("###", "decrease counter for   lastVote $lastVote    it.vote  ${it.vote}  lastVoteCount $lastVoteCount ")
                     if(lastVoteCount>0) {
                         votesSummary[lastVote] = lastVoteCount
                     }
                     else{  // or delete it
+
+                        Log.d("###", "   vote deleted   count =0")
                         idToVote.remove(lastVote)
                         idToTime.remove(lastVote)
+                        votesSummary.remove(lastVote)
+
                     }
 
 
                     // add new vote to tally
+                    Log.d("###", "     vote added")
                     votesSummary[it.vote] = (votesSummary[it.vote]?:0) + 1  // change null to 0
                 }
             }
@@ -222,9 +227,11 @@ class MainActivity() : ComponentActivity() {
 
         myUI()
 
-        // Log.d("###", "======== addVotes  idToVote is $idToVote")
-        // Log.d("###", "======== addVotes  idToTime is $idToTime")
-        // Log.d("###", "======== addVotes  votesSummary is $votesSummary")
+        Log.d("###", "SUMMARY")
+        Log.d("###", "          idToVote is $idToVote")
+        Log.d("###", "           idToTime is $idToTime")
+        Log.d("###", "            votesSummary is $votesSummary")
+        Log.d("###", "-----------------------------------------------------------------------")
     }
 
 
@@ -257,13 +264,13 @@ class MainActivity() : ComponentActivity() {
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-            Log.d("###","onEndpointFound from ${info.endpointName}")
+            // Log.d("###","onEndpointFound from ${info.endpointName}")
             connectionsClient.requestConnection(myId, endpointId, connectionLifecycleCallback)
             runBlocking {pointChannel.send("+$endpointId")}
 
         }
         override fun onEndpointLost(endpointId: String) {
-            Log.d("###","onEndpointLost  $endpointId")
+            // Log.d("###","onEndpointLost  $endpointId")
             runBlocking {pointChannel.send("-$endpointId")}
         }
     }
