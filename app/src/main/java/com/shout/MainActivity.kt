@@ -182,7 +182,7 @@ class MainActivity() : ComponentActivity() {
         while(!voteChannel.isEmpty){
 
             val it = voteChannel.receive()
-            Log.d("###", "======== addVotes  processing ${it.id} ${it.vote} ")
+            // Log.d("###", "======== addVotes  processing ${it.id} ${it.vote} ")
 
             idToTime[it.id] = System.currentTimeMillis()/1000
 
@@ -196,7 +196,7 @@ class MainActivity() : ComponentActivity() {
                     // decrease counter for lastVote
 
                     lastVoteCount = (votesSummary[lastVote]?:0)-1
-                    Log.d("###", "======== addVotes  lastVote $lastVote    it.vote  ${it.vote}  lastVoteCount $lastVoteCount ")
+                    // Log.d("###", "======== addVotes  lastVote $lastVote    it.vote  ${it.vote}  lastVoteCount $lastVoteCount ")
                     if(lastVoteCount>0) {
                         votesSummary[lastVote] = lastVoteCount
                     }
@@ -271,33 +271,18 @@ class MainActivity() : ComponentActivity() {
     private val payloadCallback: PayloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
 
-
-            val p  = payload.asBytes()
-
-            Log.d("###","onPayload     Received  p: $p")
-            Log.d("###","onPayload     Received  p as string: ${p.toString()}")
-
-            /*
-
-
+            val p = String(payload.asBytes()!!, Charsets.UTF_8)
             val aInfo :  List<String> = p.split("#")
 
-            Log.d("###","onPayload     Received  payload: $payload")
-            Log.d("###","onPayload     Received  payload.asBytes(): ${payload.asBytes()}")
-            Log.d("###","onPayload     Received  p: $p")
-            Log.d("###","onPayload     Received  aInfo ${aInfo}")
+            // Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) {return}
 
-
-            val newId: String = aInfo[1]
-            val newLat: String = aInfo[2]
-            val newLong: String = aInfo[3]
-
-            Log.d("###","onPayload     newId  $newId")
-            Log.d("###","onPayload     newLat  $newLat")
-            Log.d("###","onPayload     newLong  $newLong")
+            val newId: String = aInfo[0]
+            val newLat: String = aInfo[1]
+            val newLong: String = aInfo[2]
+            val newVote: String = aInfo[3]
 
             val newLatD: Double = newLat.toDouble()
             val newLongD: Double = newLong.toDouble()
@@ -314,10 +299,6 @@ class MainActivity() : ComponentActivity() {
             Location.distanceBetween(newLatD,newLongD, myLat,myLong,newDistance)
             if (newDistance[0] > maxDistance) return
 
-            Log.d("###","onPayload     after checking distance")
-
-            val voteStart = newId.length + newLat.length + newLong.length + 5
-            val newVote: String = p.substring( voteStart, p.length)
 
             // Check for empty strings
             if(newId.isEmpty() or newVote.isEmpty()) return
@@ -325,7 +306,6 @@ class MainActivity() : ComponentActivity() {
             // Add new vote
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
 
-             */
 
         }
 
@@ -367,13 +347,11 @@ class MainActivity() : ComponentActivity() {
     @SuppressLint("MissingPermission")
     fun broadcastUpdate() {
 
+        if ((myVote=="") || pointsList.isEmpty()) {return}
+
         val p = "$myId#$myLat#$myLong#$myVote"
-        Log.d("###","== broadcastUpdate: $myVote  $p")
+        val bytesPayload = Payload.fromBytes(p.toByteArray())
 
-        //val bytesPayload = Payload.fromBytes(p.toByteArray())
-        val bytesPayload = Payload.fromBytes(byteArrayOf(0xa, 0xb, 0xc, 0xd))
-
-        // if ((myVote=="") || pointsList.isEmpty()) {return}
         if (pointsList.isEmpty()) {return}
 
         connectionsClient.sendPayload(
@@ -549,7 +527,7 @@ class MainActivity() : ComponentActivity() {
                 if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toList()
                 else votesSummary.toList().sortedBy { (k, _) -> k }.toList()
 
-            Log.d("###","myUI    votesSorted   $votesSorted")
+            // Log.d("###","myUI    votesSorted   $votesSorted")
 
             AppTheme {
 
