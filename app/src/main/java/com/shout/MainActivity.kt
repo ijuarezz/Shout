@@ -87,17 +87,17 @@ import java.util.TimerTask
 
 
 // *******************  CONSTANTS   *******************
-const val screenFreq: Long = 5 * 1000   //  5 sec
-//const val screenFreq: Long = 1 * 1000   //  1 sec
+// const val screenFreq: Long = 5 * 1000   //  5 sec
+const val screenFreq: Long = 1 * 1000   //  1 sec
 const val locFreq: Long = 60 * 1000   //  1 min
 
 const val tooOldDuration: Long = 3 * 60   //  3 mins
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
 
+const val sep = "╚"
 
-
-class MainActivity() : ComponentActivity() {
+class MainActivity : ComponentActivity() {
 
 
     // *******************  CLASSES   *******************
@@ -135,8 +135,8 @@ class MainActivity() : ComponentActivity() {
     // *******************  TABLES   *******************
     private var idToVote = mutableMapOf<String, String>()
     private var idToTime = mutableMapOf<String, Long>()
-    val votesSummary: MutableMap<String, Int> = HashMap()
-    val pointsList = mutableListOf<String>()
+    private val votesSummary: MutableMap<String, Int> = HashMap()
+    private val pointsList = mutableListOf<String>()
 
 
     // *******************  FUNCTIONS   *******************
@@ -167,13 +167,15 @@ class MainActivity() : ComponentActivity() {
             val it = pointChannel.receive()
 
             if(it.substring(0,1)=="+") {
-                // Log.d("###", "======== endpoints  adding $it ")
                 pointsList.add(it.substring(1,it.length))
+                // log("###", "======== endpoints  adding $it ")
                             }
             else{
-                // Log.d("###", "======== endpoints  removing $it ")
                 pointsList.remove(it.substring(1,it.length))
+                // log("###", "======== endpoints  removing $it ")
             }
+
+            // log("###", "======== endpoints  list is $pointsList ")
 
         }
 
@@ -182,43 +184,45 @@ class MainActivity() : ComponentActivity() {
         while(!voteChannel.isEmpty){
 
             val it = voteChannel.receive()
-            Log.d("###", "======== addVotes  processing ${it.id} ${it.vote} ")
+
 
             idToTime[it.id] = System.currentTimeMillis()/1000
 
+            // log("###", "======== addVotes  processing ${it.id} ${it.vote} ")
+            // log("###", "======== addVotes  idToVote  $idToVote")
 
-            if(idToVote.containsKey(it.id)) {
+            if(idToVote.containsKey(it.id)) { // voter exists
 
                 lastVote = idToVote[it.id].toString()
+                idToVote[it.id] = it.vote
 
-                if (it.vote != lastVote) {
+                if (it.vote != lastVote) { // vote changed
 
-                    // decrease counter for lastVote
+                    votesSummary[it.vote] = (votesSummary[it.vote]?:0) + 1  // change null to 0
+                    // log("###", "     vote added   ${it.vote}")
 
-                    lastVoteCount = (votesSummary[lastVote]?:0)-1
-                    Log.d("###", "decrease counter for   lastVote $lastVote    it.vote  ${it.vote}  lastVoteCount $lastVoteCount ")
-                    if(lastVoteCount>0) {
+
+                    lastVoteCount = (votesSummary[lastVote]?:0)-1   // decrease counter for lastVote
+                    // log("###", "decrease counter for   lastVote $lastVote    it.vote  ${it.vote}  lastVoteCount $lastVoteCount ")
+
+                    if(lastVoteCount>0) {   // update counter
                         votesSummary[lastVote] = lastVoteCount
                     }
-                    else{  // or delete it
+                    else{  // or delete vote
 
-                        Log.d("###", "   vote deleted   count =0")
+                        // log("###", "   vote deleted   count =0")
                         idToVote.remove(lastVote)
                         idToTime.remove(lastVote)
                         votesSummary.remove(lastVote)
 
                     }
-
-
-                    // add new vote to tally
-                    Log.d("###", "     vote added")
-                    votesSummary[it.vote] = (votesSummary[it.vote]?:0) + 1  // change null to 0
                 }
             }
-            else{
-                idToVote[it.id] = it.vote
 
-                // add new vote to tally
+            else{  // new voter
+
+                // log("###", "======== addVotes  adding new ${it.id}  ${it.vote}")
+                idToVote[it.id] = it.vote
                 votesSummary[it.vote] = (votesSummary[it.vote]?:0) + 1  // change null to 0
             }
 
@@ -227,11 +231,11 @@ class MainActivity() : ComponentActivity() {
 
         myUI()
 
-        Log.d("###", "SUMMARY")
-        Log.d("###", "          idToVote is $idToVote")
-        Log.d("###", "           idToTime is $idToTime")
-        Log.d("###", "            votesSummary is $votesSummary")
-        Log.d("###", "-----------------------------------------------------------------------")
+        // // log("###", "SUMMARY")
+        // // log("###", "          idToVote is $idToVote")
+        // // log("###", "           idToTime is $idToTime")
+        // // log("###", "            votesSummary is $votesSummary")
+        // log("###", "-----------------------------------------------------------------------")
     }
 
 
@@ -240,37 +244,40 @@ class MainActivity() : ComponentActivity() {
 
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
 
-            Log.d("###","onConnectionInitiated from ${info.endpointName}")
-
+            // log("###","onConnectionInitiated from $endpointId")
             connectionsClient.acceptConnection(endpointId, payloadCallback)
 
 
         }
 
 
-
-
-
-
-
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            Log.d("###","Result  $endpointId")
+            // log("###","onConnectionResult   Result  $endpointId")
         }
         override fun onDisconnected(endpointId: String) {
-            Log.d("###","Disconnected  $endpointId")
+            // log("###","Disconnected  $endpointId")
         }
 
     }
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-            // Log.d("###","onEndpointFound from ${info.endpointName}")
-            connectionsClient.requestConnection(myId, endpointId, connectionLifecycleCallback)
+
+            // log("###","onEndpointFound from $endpointId")
             runBlocking {pointChannel.send("+$endpointId")}
+
+            if(myId.toLong()>info.endpointName.toLong()){
+
+                // log("###","onEndpointFound requesting connection")
+                connectionsClient.requestConnection(myId, endpointId, connectionLifecycleCallback)
+
+            }
+
+
 
         }
         override fun onEndpointLost(endpointId: String) {
-            // Log.d("###","onEndpointLost  $endpointId")
+            // log("###","onEndpointLost  $endpointId")
             runBlocking {pointChannel.send("-$endpointId")}
         }
     }
@@ -279,9 +286,9 @@ class MainActivity() : ComponentActivity() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
 
             val p = String(payload.asBytes()!!, Charsets.UTF_8)
-            val aInfo :  List<String> = p.split("#")
+            val aInfo :  List<String> = p.split(sep)
 
-            // Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
+            // // log("###","payloadCallback  p $p    aInfo $aInfo ")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) {return}
@@ -317,7 +324,7 @@ class MainActivity() : ComponentActivity() {
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // Log.d("###","onPayload  TransferUpdate  endpointId: $endpointId")
+            // // log("###","onPayload  TransferUpdate  endpointId: $endpointId")
             /*
             if (update.status == PayloadTransferUpdate.Status.SUCCESS
                 && myChoice != null && opponentChoice != null) {
@@ -356,10 +363,12 @@ class MainActivity() : ComponentActivity() {
 
         if ((myVote=="") || pointsList.isEmpty()) {return}
 
-        val p = "$myId#$myLat#$myLong#$myVote"
+        val p = "$myId$sep$myLat$sep$myLong$sep$myVote"
         val bytesPayload = Payload.fromBytes(p.toByteArray())
 
         if (pointsList.isEmpty()) {return}
+
+        // log("###","broadcastUpdate  sending to  $pointsList")
 
         connectionsClient.sendPayload(
             pointsList,
@@ -367,7 +376,7 @@ class MainActivity() : ComponentActivity() {
         )
     }
 
-    fun stopAll(){
+    private fun stopAll(){
 
         timerScreen.cancel()
         timerLoc.cancel()
@@ -397,7 +406,7 @@ class MainActivity() : ComponentActivity() {
                 if (location != null) {
                     myLat = location.latitude
                     myLong = location.longitude
-                    // Log.d("###","== Location: $myLat $myLong")
+                    // // log("###","== Location: $myLat $myLong")
                 }
 
             }
@@ -530,11 +539,11 @@ class MainActivity() : ComponentActivity() {
 
 
             // sort by either votes or alphabetically
-            var votesSorted =
+            val votesSorted =
                 if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toList()
                 else votesSummary.toList().sortedBy { (k, _) -> k }.toList()
 
-            // Log.d("###","myUI    votesSorted   $votesSorted")
+            // // log("###","myUI    votesSorted   $votesSorted")
 
             AppTheme {
 
@@ -619,11 +628,7 @@ class MainActivity() : ComponentActivity() {
 
                                         onValueChange = {
                                             if (it.length <= maxVoteLength) textTyped = it
-                                            else Toast.makeText(
-                                                myContext,
-                                                "Cannot be more than $maxVoteLength characters",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                            else Toast.makeText(myContext, "Max numbers of characters is $maxVoteLength",Toast.LENGTH_SHORT).show()
                                         },
 
                                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences),
@@ -676,6 +681,7 @@ class MainActivity() : ComponentActivity() {
                                         colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
                                         onClick = {
                                                 myVote = eachTally.first
+                                                runBlocking {voteChannel.send(IdVote("Me",myVote))}
                                         },
 
                                         modifier = Modifier
@@ -756,7 +762,7 @@ class MainActivity() : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        Log.d("###"," onCreate")
+        // log("###"," onCreate")
         checkPermissions()
         getMyPreferences()
 
@@ -812,7 +818,7 @@ class MainActivity() : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        Log.d("###"," onResume")
+        // log("###"," onResume")
 
         timerScreenOn = true
         timerLocOn = true
@@ -822,7 +828,7 @@ class MainActivity() : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        Log.d("###"," onPause")
+        // log("###"," onPause")
 
         timerScreenOn = false
         timerLocOn = false
@@ -834,7 +840,7 @@ class MainActivity() : ComponentActivity() {
     @CallSuper
     override fun onStop() {
 
-        Log.d("###"," onStop")
+        // log("###"," onStop")
         stopAll()
 
         super.onStop()
@@ -843,7 +849,7 @@ class MainActivity() : ComponentActivity() {
     @CallSuper
     override fun onDestroy() {
 
-        Log.d("###"," onDestroy")
+        // log("###"," onDestroy")
         stopAll()
 
         super.onDestroy()
