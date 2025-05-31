@@ -91,7 +91,8 @@ import java.util.TimerTask
 const val screenFreq: Long = 1 * 1000   //  1 sec
 const val locFreq: Long = 60 * 1000   //  1 min
 
-const val tooOldDuration: Long = 3 * 60   //  3 mins
+// const val tooOldDuration: Long = 3 * 60   //  3 mins
+const val tooOldDuration: Long = 10   //  10 SECS
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
 
@@ -244,7 +245,7 @@ class MainActivity : ComponentActivity() {
 
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
 
-            // log("###","onConnectionInitiated from $endpointId")
+            Log.d("###","onConnectionInitiated from $endpointId")
             connectionsClient.acceptConnection(endpointId, payloadCallback)
 
 
@@ -252,10 +253,10 @@ class MainActivity : ComponentActivity() {
 
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            // log("###","onConnectionResult   Result  $endpointId")
+            Log.d("###","onConnectionResult   Result  $endpointId")
         }
         override fun onDisconnected(endpointId: String) {
-            // log("###","Disconnected  $endpointId")
+            Log.d("###","Disconnected  $endpointId")
         }
 
     }
@@ -263,13 +264,24 @@ class MainActivity : ComponentActivity() {
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
 
-            // log("###","onEndpointFound from $endpointId")
+            Log.d("###","onEndpointFound from $endpointId")
             runBlocking {pointChannel.send("+$endpointId")}
+            val newId = info.endpointName
+            if(myId.toLong()>newId.toLong()){
 
-            if(myId.toLong()>info.endpointName.toLong()){
 
-                // log("###","onEndpointFound requesting connection")
-                connectionsClient.requestConnection(myId, endpointId, connectionLifecycleCallback)
+                if(idToVote.containsKey(newId))
+                {
+                    Log.d("###", "onEndpointFound   voter exists")
+                    return
+                }
+
+                Log.d("###", "onEndpointFound <<< requesting connection >>>")
+                connectionsClient.requestConnection(
+                    myId,
+                    endpointId,
+                    connectionLifecycleCallback
+                )
 
             }
 
@@ -277,7 +289,7 @@ class MainActivity : ComponentActivity() {
 
         }
         override fun onEndpointLost(endpointId: String) {
-            // log("###","onEndpointLost  $endpointId")
+            Log.d("###","onEndpointLost  $endpointId")
             runBlocking {pointChannel.send("-$endpointId")}
         }
     }
@@ -288,7 +300,7 @@ class MainActivity : ComponentActivity() {
             val p = String(payload.asBytes()!!, Charsets.UTF_8)
             val aInfo :  List<String> = p.split(sep)
 
-            // // log("###","payloadCallback  p $p    aInfo $aInfo ")
+            Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) {return}
@@ -324,33 +336,8 @@ class MainActivity : ComponentActivity() {
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // // log("###","onPayload  TransferUpdate  endpointId: $endpointId")
-            /*
-            if (update.status == PayloadTransferUpdate.Status.SUCCESS
-                && myChoice != null && opponentChoice != null) {
-                val mc = myChoice!!
-                val oc = opponentChoice!!
-                when {
-                    mc.beats(oc) -> { // Win!
-                        binding.status.text = "${mc.name} beats ${oc.name}"
-                        myScore++
-                    }
-                    mc == oc -> { // Tie
-                        binding.status.text = "You both chose ${mc.name}"
-                    }
-                    else -> { // Loss
-                        binding.status.text = "${mc.name} loses to ${oc.name}"
-                        opponentScore++
-                    }
-                }
-                binding.score.text = "$myScore : $opponentScore"
-                myChoice = null
-                opponentChoice = null
-                setGameControllerEnabled(true)
-            }
+            Log.d("###","onPayload  TransferUpdate  endpointId: $endpointId")
 
-
-             */
         }
     }
 
@@ -368,7 +355,7 @@ class MainActivity : ComponentActivity() {
 
         if (pointsList.isEmpty()) {return}
 
-        // log("###","broadcastUpdate  sending to  $pointsList")
+        Log.d("###","broadcastUpdate  sending to  $pointsList")
 
         connectionsClient.sendPayload(
             pointsList,
@@ -762,7 +749,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // log("###"," onCreate")
+        Log.d("###"," onCreate")
         checkPermissions()
         getMyPreferences()
 
@@ -818,7 +805,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        // log("###"," onResume")
+        Log.d("###"," onResume")
 
         timerScreenOn = true
         timerLocOn = true
@@ -828,7 +815,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        // log("###"," onPause")
+        Log.d("###"," onPause")
 
         timerScreenOn = false
         timerLocOn = false
@@ -840,7 +827,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onStop() {
 
-        // log("###"," onStop")
+        Log.d("###"," onStop")
         stopAll()
 
         super.onStop()
@@ -849,7 +836,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onDestroy() {
 
-        // log("###"," onDestroy")
+        Log.d("###"," onDestroy")
         stopAll()
 
         super.onDestroy()
