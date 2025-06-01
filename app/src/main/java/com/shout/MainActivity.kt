@@ -158,6 +158,7 @@ class MainActivity : ComponentActivity() {
 
             if (thisVote.value < tooOld) {  // remove vote & timestamp
                 idToVote.remove(thisVote.key)
+                votesSummary.remove(thisVote.key)
                 iterator.remove()
             }
         }
@@ -169,14 +170,14 @@ class MainActivity : ComponentActivity() {
 
             if(it.substring(0,1)=="+") {
                 pointsList.add(it.substring(1,it.length))
-                // log("###", "======== endpoints  adding $it ")
+                Log.d("###", "======== endpoints  adding $it ")
                             }
             else{
                 pointsList.remove(it.substring(1,it.length))
-                // log("###", "======== endpoints  removing $it ")
+                Log.d("###", "======== endpoints  removing $it ")
             }
 
-            // log("###", "======== endpoints  list is $pointsList ")
+            Log.d("###", "======== endpoints  list is $pointsList ")
 
         }
 
@@ -336,7 +337,7 @@ class MainActivity : ComponentActivity() {
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            Log.d("###","onPayload  TransferUpdate  endpointId: $endpointId")
+            // Log.d("###","onPayload  TransferUpdate  endpointId: $endpointId")
 
         }
     }
@@ -647,6 +648,16 @@ class MainActivity : ComponentActivity() {
                                 horizontalArrangement = Arrangement.Absolute.Center
 
                             ){
+
+                                val votes = idToVote.count()
+                                val total = (pointsList.count()+1 - votes)
+
+                                Text(
+                                    text = "\u2611 $votes   \u2610 ${if (total < 0) 0 else total} ",
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(all = 9.dp),
+                                )
+
                             }
 
                         },
@@ -726,7 +737,7 @@ class MainActivity : ComponentActivity() {
 
                                 Icon(
 
-                                    painter = if (mySortByVote.value) painterResource(id = R.drawable.ic_baseline_favorite_border_24) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
+                                    painter = if (mySortByVote.value) painterResource(id = R.drawable.format_list_numbered_24px) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
                                     contentDescription = "Change",
                                     modifier = Modifier.size(30.dp)
                                 )
@@ -777,6 +788,7 @@ class MainActivity : ComponentActivity() {
                 override fun run() {
                     if (!timerScreenOn) {return}
                     runOnUiThread {
+                        if (myVote!="") runBlocking {voteChannel.send(IdVote("Me",myVote))}
                         runBlocking {process()}
                     }
                 }
