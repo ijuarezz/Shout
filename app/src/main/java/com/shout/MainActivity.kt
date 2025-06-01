@@ -178,8 +178,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        Log.d("###", ".........     idToVote $idToVote")
-        Log.d("###", ".........     votesSummary $votesSummary")
+        // Log.d("###", ".........     idToVote $idToVote")
+        // Log.d("###", ".........     votesSummary $votesSummary")
 
 
         // update endpoints
@@ -188,14 +188,14 @@ class MainActivity : ComponentActivity() {
 
             if(it.substring(0,1)=="+") {
                 pointsList.add(it.substring(1,it.length))
-                Log.d("###", "======== endpoints  adding $it ")
+                // Log.d("###", "======== endpoints  adding $it ")
                             }
             else{
                 pointsList.remove(it.substring(1,it.length))
-                Log.d("###", "======== endpoints  removing $it ")
+                // Log.d("###", "======== endpoints  removing $it ")
             }
 
-            Log.d("###", "======== endpoints  list is $pointsList ")
+            // Log.d("###", "======== endpoints  list is $pointsList ")
 
         }
 
@@ -260,7 +260,7 @@ class MainActivity : ComponentActivity() {
 
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
 
-            Log.d("###","onConnectionInitiated from $endpointId")
+            // Log.d("###","onConnectionInitiated from $endpointId")
             connectionsClient.acceptConnection(endpointId, payloadCallback)
 
 
@@ -268,10 +268,10 @@ class MainActivity : ComponentActivity() {
 
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            Log.d("###","onConnectionResult   Result  $endpointId")
+            // Log.d("###","onConnectionResult   Result  $endpointId")
         }
         override fun onDisconnected(endpointId: String) {
-            Log.d("###","Disconnected  $endpointId")
+            // Log.d("###","Disconnected  $endpointId")
         }
 
     }
@@ -279,7 +279,7 @@ class MainActivity : ComponentActivity() {
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
 
-            Log.d("###","onEndpointFound from $endpointId")
+            // Log.d("###","onEndpointFound from $endpointId")
             runBlocking {pointChannel.send("+$endpointId")}
             val newId = info.endpointName
 
@@ -290,11 +290,11 @@ class MainActivity : ComponentActivity() {
                 if(false)
                 //if(idToVote.containsKey(newId))
                 {
-                    Log.d("###", "onEndpointFound   voter exists")
+                    // Log.d("###", "onEndpointFound   voter exists")
                     return
                 }
 
-                Log.d("###", "onEndpointFound <<< requesting connection >>>")
+                // Log.d("###", "onEndpointFound <<< requesting connection >>>")
                 connectionsClient.requestConnection(
                     myId,
                     endpointId,
@@ -373,7 +373,7 @@ class MainActivity : ComponentActivity() {
 
         if (pointsList.isEmpty()) {return}
 
-        Log.d("###","broadcastUpdate  sending to  $pointsList")
+        // Log.d("###","broadcastUpdate  sending to  $pointsList")
 
         connectionsClient.sendPayload(
             pointsList,
@@ -670,8 +670,9 @@ class MainActivity : ComponentActivity() {
                                 val total = (pointsList.count()+1 - votes)
 
                                 Text(
-                                    text = "\u2611 $votes   \u2610 ${if (total < 0) 0 else total} ",
+                                    text = "\u2611 $votes      \u2610 ${if (total < 0) 0 else total} ",
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontSize = 20.sp,
                                     modifier = Modifier.padding(all = 9.dp),
                                 )
 
@@ -803,7 +804,11 @@ class MainActivity : ComponentActivity() {
             object : TimerTask() {
 
                 override fun run() {
+
+                    Log.d("###"," TimerTask")
                     if (!timerScreenOn) {return}
+
+                    Log.d("###","   TimerTask running")
                     runOnUiThread {
                         if (myVote!="") runBlocking {voteChannel.send(IdVote("Me",myVote))}
                         runBlocking {process()}
@@ -857,8 +862,6 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
 
         Log.d("###"," onStop")
-        stopAll()
-
         super.onStop()
     }
 
