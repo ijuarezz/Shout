@@ -91,8 +91,8 @@ import java.util.TimerTask
 const val screenFreq: Long = 1 * 1000   //  1 sec
 const val locFreq: Long = 60 * 1000   //  1 min
 
-// const val tooOldDuration: Long = 3 * 60   //  3 mins
-const val tooOldDuration: Long = 10   //  10 SECS
+const val tooOldDuration: Long = 3 * 60   //  3 mins
+// const val tooOldDuration: Long = 10   //  10 SECS
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
 
@@ -156,12 +156,30 @@ class MainActivity : ComponentActivity() {
         while (iterator.hasNext()) {
             val thisVote = iterator.next()
 
+
             if (thisVote.value < tooOld) {  // remove vote & timestamp
-                idToVote.remove(thisVote.key)
-                votesSummary.remove(thisVote.key)
+
                 iterator.remove()
+
+                val lostVote = idToVote[thisVote.key].toString()
+                val lostVoteCount = (votesSummary[lostVote]?:0)-1   // decrease counter for lostVote
+
+                idToVote.remove(lostVote)
+
+
+                if(lostVoteCount>0) {   // update counter
+                    votesSummary[lostVote] = lostVoteCount
+                }
+                else{  // or delete lostVote
+
+                    votesSummary.remove(lostVote)
+
+                }
             }
         }
+
+        Log.d("###", ".........     idToVote $idToVote")
+        Log.d("###", ".........     votesSummary $votesSummary")
 
 
         // update endpoints
@@ -201,18 +219,14 @@ class MainActivity : ComponentActivity() {
                 if (it.vote != lastVote) { // vote changed
 
                     votesSummary[it.vote] = (votesSummary[it.vote]?:0) + 1  // change null to 0
-                    // log("###", "     vote added   ${it.vote}")
-
 
                     lastVoteCount = (votesSummary[lastVote]?:0)-1   // decrease counter for lastVote
-                    // log("###", "decrease counter for   lastVote $lastVote    it.vote  ${it.vote}  lastVoteCount $lastVoteCount ")
 
                     if(lastVoteCount>0) {   // update counter
                         votesSummary[lastVote] = lastVoteCount
                     }
                     else{  // or delete vote
 
-                        // log("###", "   vote deleted   count =0")
                         idToVote.remove(lastVote)
                         idToTime.remove(lastVote)
                         votesSummary.remove(lastVote)
@@ -268,10 +282,13 @@ class MainActivity : ComponentActivity() {
             Log.d("###","onEndpointFound from $endpointId")
             runBlocking {pointChannel.send("+$endpointId")}
             val newId = info.endpointName
-            if(myId.toLong()>newId.toLong()){
+
+            if(true){
+            //if(myId.toLong()>newId.toLong()){
 
 
-                if(idToVote.containsKey(newId))
+                if(false)
+                //if(idToVote.containsKey(newId))
                 {
                     Log.d("###", "onEndpointFound   voter exists")
                     return
@@ -301,7 +318,7 @@ class MainActivity : ComponentActivity() {
             val p = String(payload.asBytes()!!, Charsets.UTF_8)
             val aInfo :  List<String> = p.split(sep)
 
-            Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
+            // Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) {return}
