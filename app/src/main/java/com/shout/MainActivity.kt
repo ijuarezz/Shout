@@ -109,6 +109,13 @@ class MainActivity : ComponentActivity() {
     var myLong: Double = 0.0
     private var myId: String = ""
     private var myVote=""
+    private var myLastVote=""
+
+
+
+    private var votesCount =0
+    private var endpointsCount  =0
+
 
     private var fusedLocationClient: FusedLocationProviderClient? = null
     private val strategy = Strategy.P2P_CLUSTER
@@ -127,8 +134,8 @@ class MainActivity : ComponentActivity() {
 
 
     // *******************  TIMERS   *******************
-    private val timerScreen = Timer(true)
-    var timerScreenOn = true
+    private val timerProcess = Timer(true)
+    private var timerScreenOn = true
 
     private val timerLoc = Timer(true)
     var timerLocOn = true
@@ -137,7 +144,7 @@ class MainActivity : ComponentActivity() {
     private var idToVote = mutableMapOf<String, String>()
     private var idToTime = mutableMapOf<String, Long>()
     private val votesSummary: MutableMap<String, Int> = HashMap()
-    private val pointsList = mutableListOf<String>()
+    private val endpointsList = mutableListOf<String>()
 
 
     // *******************  FUNCTIONS   *******************
@@ -148,8 +155,6 @@ class MainActivity : ComponentActivity() {
         var lastVote:String
         var lastVoteCount: Int
         val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldDuration
-
-        broadcastUpdate()
 
         //delete old entries by time first
         val iterator = idToTime.iterator()
@@ -187,20 +192,21 @@ class MainActivity : ComponentActivity() {
             val it = pointChannel.receive()
 
             if(it.substring(0,1)=="+") {
-                pointsList.add(it.substring(1,it.length))
+                endpointsList.add(it.substring(1,it.length))
                 // Log.d("###", "======== endpoints  adding $it ")
                             }
             else{
-                pointsList.remove(it.substring(1,it.length))
+                endpointsList.remove(it.substring(1,it.length))
                 // Log.d("###", "======== endpoints  removing $it ")
             }
 
-            // Log.d("###", "======== endpoints  list is $pointsList ")
+            // Log.d("###", "======== endpoints  list is ${endpointsList}")
 
         }
 
+
         // todo
-        // may be running for more than 1 sec
+        // process votes
         while(!voteChannel.isEmpty){
 
             val it = voteChannel.receive()
@@ -245,13 +251,62 @@ class MainActivity : ComponentActivity() {
 
         }
 
+
+
+
+        // process my myVote
+        // Log.d("###","myVote: $myVote  myLastVote: $myLastVote ")
+
+        if (myVote!=myLastVote){
+
+            if (myVote!="") {
+                // Log.d("###","inside A")
+                votesSummary[myVote] = (votesSummary[myVote]?:0) + 1   // change null to 0
+            }
+
+            if (myLastVote!="") {
+                // Log.d("###","     inside B")
+                lastVoteCount = (votesSummary[myLastVote]?:0)-1   // decrease counter for lastVote
+
+                if(lastVoteCount>0) {   // update counter
+                    votesSummary[myLastVote] = lastVoteCount
+                }
+                else{  // or delete vote
+                    votesSummary.remove(myLastVote)
+
+                }
+            }
+
+        }
+
+        myLastVote = myVote
+
+        //update vote count
+        votesCount = idToVote.count()
+        if (myVote!="") votesCount++
+
+        //update endpoints count
+        endpointsCount = (endpointsList.count() + 1)
+        // if (endpointsCount < votesCount) endpointsCount = votesCount
+
+        if (!timerScreenOn) {return}
+
+        // Log.d("###","   TimerTask running:       broadcastUpdate   myUI()")
+
+
         myUI()
 
-        // // log("###", "SUMMARY")
-        // // log("###", "          idToVote is $idToVote")
-        // // log("###", "           idToTime is $idToTime")
-        // // log("###", "            votesSummary is $votesSummary")
-        // log("###", "-----------------------------------------------------------------------")
+        // Old broadcastUpdate()
+
+        Log.d("###","before broadcastUpdate  myVote: $myVote")
+        if ((myVote=="") || endpointsList.isEmpty()) {return}
+
+        val p = "$myId$sep$myLat$sep$myLong$sep$myVote"
+        connectionsClient.sendPayload(endpointsList,Payload.fromBytes(p.toByteArray()))
+
+        // Log.d("###","broadcastUpdate  sending to  $endpointsList")
+
+
     }
 
 
@@ -281,33 +336,16 @@ class MainActivity : ComponentActivity() {
 
             // Log.d("###","onEndpointFound from $endpointId")
             runBlocking {pointChannel.send("+$endpointId")}
-            val newId = info.endpointName
 
-            if(true){
-            //if(myId.toLong()>newId.toLong()){
-
-
-                if(false)
-                //if(idToVote.containsKey(newId))
-                {
-                    // Log.d("###", "onEndpointFound   voter exists")
-                    return
-                }
-
-                // Log.d("###", "onEndpointFound <<< requesting connection >>>")
-                connectionsClient.requestConnection(
-                    myId,
-                    endpointId,
-                    connectionLifecycleCallback
-                )
-
-            }
-
-
-
+            // Log.d("###", "onEndpointFound <<< requesting connection >>>")
+            connectionsClient.requestConnection(
+                myId,
+                endpointId,
+                connectionLifecycleCallback
+            )
         }
         override fun onEndpointLost(endpointId: String) {
-            Log.d("###","onEndpointLost  $endpointId")
+            // Log.d("###","onEndpointLost  $endpointId")
             runBlocking {pointChannel.send("-$endpointId")}
         }
     }
@@ -361,37 +399,6 @@ class MainActivity : ComponentActivity() {
 
 
 
-    // *******************  COMMS   *******************
-
-    @SuppressLint("MissingPermission")
-    fun broadcastUpdate() {
-
-        if ((myVote=="") || pointsList.isEmpty()) {return}
-
-        val p = "$myId$sep$myLat$sep$myLong$sep$myVote"
-        val bytesPayload = Payload.fromBytes(p.toByteArray())
-
-        if (pointsList.isEmpty()) {return}
-
-        // Log.d("###","broadcastUpdate  sending to  $pointsList")
-
-        connectionsClient.sendPayload(
-            pointsList,
-            bytesPayload
-        )
-    }
-
-    private fun stopAll(){
-
-        timerScreen.cancel()
-        timerLoc.cancel()
-
-        connectionsClient.stopAdvertising()
-        connectionsClient.stopAllEndpoints()
-        connectionsClient.stopDiscovery()
-
-
-    }
 
 
     // *******************  FUNCTIONS   *******************
@@ -561,7 +568,7 @@ class MainActivity : ComponentActivity() {
 
 
                     Scaffold(
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 30.dp),
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 40.dp),
                         topBar = {
 
                             tallyColor = if(myVote == ""){
@@ -642,9 +649,8 @@ class MainActivity : ComponentActivity() {
                                                 keyboardController?.hide()
                                                 focusManager.clearFocus()
                                                 myVote = textTyped.trim()
-
-                                                runBlocking {voteChannel.send(IdVote("Me",myVote))}
                                                 textTyped=""
+
                                             }
                                         ),
 
@@ -666,11 +672,8 @@ class MainActivity : ComponentActivity() {
 
                             ){
 
-                                val votes = idToVote.count()
-                                val total = (pointsList.count()+1 - votes)
-
                                 Text(
-                                    text = "\u2611 $votes      \u2610 ${if (total < 0) 0 else total} ",
+                                    text = "\u2611 $votesCount      \u2610 ${endpointsCount - votesCount} ",
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     fontSize = 20.sp,
                                     modifier = Modifier.padding(all = 9.dp),
@@ -696,8 +699,9 @@ class MainActivity : ComponentActivity() {
                                     Card(
                                         colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
                                         onClick = {
-                                                myVote = eachTally.first
-                                                runBlocking {voteChannel.send(IdVote("Me",myVote))}
+
+                                                myVote = if (myVote == eachTally.first) "" else eachTally.first
+
                                         },
 
                                         modifier = Modifier
@@ -778,7 +782,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        Log.d("###"," onCreate")
+        // Log.d("###"," onCreate")
         checkPermissions()
         getMyPreferences()
 
@@ -800,17 +804,14 @@ class MainActivity : ComponentActivity() {
 
 
         // Recurring event to update Screen & Broadcast
-        timerScreen.schedule(
+        timerProcess.schedule(
             object : TimerTask() {
 
                 override fun run() {
 
-                    Log.d("###"," TimerTask")
-                    if (!timerScreenOn) {return}
+                    // Log.d("###"," TimerTask")
 
-                    Log.d("###","   TimerTask running")
                     runOnUiThread {
-                        if (myVote!="") runBlocking {voteChannel.send(IdVote("Me",myVote))}
                         runBlocking {process()}
                     }
                 }
@@ -839,7 +840,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        Log.d("###"," onResume")
+        // Log.d("###"," onResume")
 
         timerScreenOn = true
         timerLocOn = true
@@ -849,7 +850,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        Log.d("###"," onPause")
+        // Log.d("###"," onPause")
 
         timerScreenOn = false
         timerLocOn = false
@@ -861,15 +862,21 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onStop() {
 
-        Log.d("###"," onStop")
+        // Log.d("###"," onStop")
         super.onStop()
     }
 
     @CallSuper
     override fun onDestroy() {
 
-        Log.d("###"," onDestroy")
-        stopAll()
+        // Log.d("###"," onDestroy")
+
+        timerProcess.cancel()
+        timerLoc.cancel()
+
+        connectionsClient.stopAdvertising()
+        connectionsClient.stopAllEndpoints()
+        connectionsClient.stopDiscovery()
 
         super.onDestroy()
     }
