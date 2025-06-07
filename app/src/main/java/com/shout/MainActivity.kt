@@ -91,12 +91,13 @@ import java.util.TimerTask
 const val screenFreq: Long = 1 * 1000   //  1 sec
 const val locFreq: Long = 60 * 1000   //  1 min
 
-const val tooOldDuration: Long = 3 * 60   //  3 mins
-// const val tooOldDuration: Long = 10   //  10 SECS
+// const val tooOldDuration: Long = 3 * 60   //  3 mins
+const val tooOldDuration: Long = 10   //  10 SECS
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
 
 const val sep = "╚"
+const val emptyVote = "<no vote>"
 
 class MainActivity : ComponentActivity() {
 
@@ -108,13 +109,7 @@ class MainActivity : ComponentActivity() {
     var myLat: Double = 0.0
     var myLong: Double = 0.0
     private var myId: String = ""
-    private var myVote=""
-    private var myLastVote=""
-
-
-
-    private var votesCount =0
-    private var endpointsCount  =0
+    private var myVote=emptyVote
 
 
     private var fusedLocationClient: FusedLocationProviderClient? = null
@@ -159,17 +154,23 @@ class MainActivity : ComponentActivity() {
         //delete old entries by time first
         val iterator = idToTime.iterator()
         while (iterator.hasNext()) {
-            val thisVote = iterator.next()
+            val iVote = iterator.next()
 
 
-            if (thisVote.value < tooOld) {  // remove vote & timestamp
+            if (iVote.value < tooOld) {  // remove vote & timestamp
 
+                Log.d("###", "========     $iVote is too old")
                 iterator.remove()
 
-                val lostVote = idToVote[thisVote.key].toString()
+                val lostId = iVote.key
+                val lostVote = idToVote[lostId].toString()
                 val lostVoteCount = (votesSummary[lostVote]?:0)-1   // decrease counter for lostVote
 
-                idToVote.remove(lostVote)
+
+                // Log.d("###", "========     before $idToVote")
+                // Log.d("###", "========     before $votesSummary")
+                idToVote.remove(lostId)
+
 
 
                 if(lostVoteCount>0) {   // update counter
@@ -180,6 +181,10 @@ class MainActivity : ComponentActivity() {
                     votesSummary.remove(lostVote)
 
                 }
+
+                // Log.d("###", "========        after $idToVote")
+                // Log.d("###", "========        after $votesSummary")
+
             }
         }
 
@@ -205,26 +210,28 @@ class MainActivity : ComponentActivity() {
         }
 
 
-        // todo
         // process votes
         while(!voteChannel.isEmpty){
 
             val it = voteChannel.receive()
-
+            val thisVote = it.vote
+            Log.d("###", "======== addVotes  processing $thisVote ")
 
             idToTime[it.id] = System.currentTimeMillis()/1000
 
-            // log("###", "======== addVotes  processing ${it.id} ${it.vote} ")
-            // log("###", "======== addVotes  idToVote  $idToVote")
+            Log.d("###", "========   idToVote  $idToVote")
 
             if(idToVote.containsKey(it.id)) { // voter exists
 
+                Log.d("###", "========   voter exists")
+
                 lastVote = idToVote[it.id].toString()
-                idToVote[it.id] = it.vote
 
-                if (it.vote != lastVote) { // vote changed
+                if (thisVote != lastVote) { // vote changed
 
-                    votesSummary[it.vote] = (votesSummary[it.vote]?:0) + 1  // change null to 0
+
+                    Log.d("###", "========       vote changed")
+                    if(thisVote!= emptyVote) votesSummary[thisVote] = (votesSummary[thisVote]?:0) + 1  // change null to 0
 
                     lastVoteCount = (votesSummary[lastVote]?:0)-1   // decrease counter for lastVote
 
@@ -242,52 +249,15 @@ class MainActivity : ComponentActivity() {
             }
 
             else{  // new voter
+                if(thisVote!= emptyVote) votesSummary[thisVote] = (votesSummary[thisVote]?:0) + 1  // change null to 0
 
-                // log("###", "======== addVotes  adding new ${it.id}  ${it.vote}")
-                idToVote[it.id] = it.vote
-                votesSummary[it.vote] = (votesSummary[it.vote]?:0) + 1  // change null to 0
             }
+
+            idToVote[it.id] = thisVote
 
 
         }
 
-
-
-
-        // process my myVote
-        // Log.d("###","myVote: $myVote  myLastVote: $myLastVote ")
-
-        if (myVote!=myLastVote){
-
-            if (myVote!="") {
-                // Log.d("###","inside A")
-                votesSummary[myVote] = (votesSummary[myVote]?:0) + 1   // change null to 0
-            }
-
-            if (myLastVote!="") {
-                // Log.d("###","     inside B")
-                lastVoteCount = (votesSummary[myLastVote]?:0)-1   // decrease counter for lastVote
-
-                if(lastVoteCount>0) {   // update counter
-                    votesSummary[myLastVote] = lastVoteCount
-                }
-                else{  // or delete vote
-                    votesSummary.remove(myLastVote)
-
-                }
-            }
-
-        }
-
-        myLastVote = myVote
-
-        //update vote count
-        votesCount = idToVote.count()
-        if (myVote!="") votesCount++
-
-        //update endpoints count
-        endpointsCount = (endpointsList.count() + 1)
-        // if (endpointsCount < votesCount) endpointsCount = votesCount
 
         if (!timerScreenOn) {return}
 
@@ -298,8 +268,10 @@ class MainActivity : ComponentActivity() {
 
         // Old broadcastUpdate()
 
-        Log.d("###","before broadcastUpdate  myVote: $myVote")
-        if ((myVote=="") || endpointsList.isEmpty()) {return}
+
+        if (endpointsList.isEmpty()) {return}
+
+        // Log.d("###","sending  $myVote to $endpointsList")
 
         val p = "$myId$sep$myLat$sep$myLong$sep$myVote"
         connectionsClient.sendPayload(endpointsList,Payload.fromBytes(p.toByteArray()))
@@ -386,6 +358,7 @@ class MainActivity : ComponentActivity() {
             if(newId.isEmpty() or newVote.isEmpty()) return
 
             // Add new vote
+            // Log.d("###","payloadCallback      ADDING TO CHANNEL p $p    aInfo $aInfo ")
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
 
 
@@ -503,7 +476,7 @@ class MainActivity : ComponentActivity() {
 
         // Find or create myID
         if (sharedPreference.contains("myId")) {
-            myId = sharedPreference.getString("myId", "").toString()
+            myId = sharedPreference.getString("myId", emptyVote).toString()
         } else {
             myId = System.currentTimeMillis().toString()
             editor.putString("myId", myId)
@@ -571,7 +544,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 40.dp),
                         topBar = {
 
-                            tallyColor = if(myVote == ""){
+                            tallyColor = if(myVote == emptyVote){
                                 MaterialTheme.colorScheme.primaryContainer
                             } else{
                                 MaterialTheme.colorScheme.surfaceVariant
@@ -650,6 +623,7 @@ class MainActivity : ComponentActivity() {
                                                 focusManager.clearFocus()
                                                 myVote = textTyped.trim()
                                                 textTyped=""
+                                                runBlocking {voteChannel.send(IdVote(myId,myVote))}
 
                                             }
                                         ),
@@ -672,10 +646,11 @@ class MainActivity : ComponentActivity() {
 
                             ){
 
+                                //(myVote!= emptyVote).compareTo(false)
                                 Text(
-                                    text = "\u2611 $votesCount      \u2610 ${endpointsCount - votesCount} ",
+                                    text = "${votesSorted.count()} of ${endpointsList.count()+1}",
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    fontSize = 20.sp,
+                                    // fontSize = 20.sp,   or TextUnit.Unspecified ?
                                     modifier = Modifier.padding(all = 9.dp),
                                 )
 
@@ -700,7 +675,8 @@ class MainActivity : ComponentActivity() {
                                         colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
                                         onClick = {
 
-                                                myVote = if (myVote == eachTally.first) "" else eachTally.first
+                                                myVote = if (myVote == eachTally.first) emptyVote else eachTally.first
+                                                runBlocking {voteChannel.send(IdVote(myId,myVote))}
 
                                         },
 
@@ -812,6 +788,7 @@ class MainActivity : ComponentActivity() {
                     // Log.d("###"," TimerTask")
 
                     runOnUiThread {
+                        runBlocking {voteChannel.send(IdVote(myId,myVote))}
                         runBlocking {process()}
                     }
                 }
@@ -862,14 +839,14 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onStop() {
 
-        // Log.d("###"," onStop")
+        Log.d("###"," onStop")
         super.onStop()
     }
 
     @CallSuper
     override fun onDestroy() {
 
-        // Log.d("###"," onDestroy")
+        Log.d("###"," onDestroy")
 
         timerProcess.cancel()
         timerLoc.cancel()
