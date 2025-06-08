@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -166,7 +165,7 @@ class MainActivity : ComponentActivity() {
 
             if (iVote.value < tooOld) {  // remove vote & timestamp
 
-                Log.d("###", "========     $iVote is too old")
+                // Log.d("###", "========     $iVote is too old")
                 iterator.remove()
 
                 val lostId = iVote.key
@@ -222,22 +221,22 @@ class MainActivity : ComponentActivity() {
 
             val it = voteChannel.receive()
             val thisVote = it.vote
-            Log.d("###", "======== addVotes  processing $thisVote ")
+            // Log.d("###", "======== addVotes  processing $thisVote ")
 
             idToTime[it.id] = System.currentTimeMillis()/1000
 
-            Log.d("###", "========   idToVote  $idToVote")
+            // Log.d("###", "========   idToVote  $idToVote")
 
             if(idToVote.containsKey(it.id)) { // voter exists
 
-                Log.d("###", "========   voter exists")
+                // Log.d("###", "========   voter exists")
 
                 lastVote = idToVote[it.id].toString()
 
                 if (thisVote != lastVote) { // vote changed
 
 
-                    Log.d("###", "========       vote changed")
+                    // Log.d("###", "========       vote changed")
                     if(thisVote!= emptyVote) votesSummary[thisVote] = (votesSummary[thisVote]?:0) + 1  // change null to 0
 
                     lastVoteCount = (votesSummary[lastVote]?:0)-1   // decrease counter for lastVote
@@ -350,7 +349,7 @@ class MainActivity : ComponentActivity() {
 
             // Warning if missing location
             if(myLat == 0.toDouble()){
-            Toast.makeText(this@MainActivity, "Location settings error, using approximate values", Toast.LENGTH_LONG).show()
+            Toast.makeText(this@MainActivity, getString(R.string.location_error), Toast.LENGTH_LONG).show()
             myLat = newLatD
             myLong = newLongD
             }
@@ -456,8 +455,7 @@ class MainActivity : ComponentActivity() {
 
                     } else {
 
-                        val errMsg = "Cannot start without required permissions"
-                        Toast.makeText(this, errMsg, Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, getString(R.string.permission_error), Toast.LENGTH_LONG).show()
 
                         // Reset for next run & exit
                         val packageName = applicationContext.packageName
@@ -623,7 +621,7 @@ class MainActivity : ComponentActivity() {
                                             },
 
                                         value = textTyped,
-                                        placeholder = { Text("Select from below or add new") },
+                                        placeholder = { Text(getString(R.string.input_field)) },
                                         singleLine = true,
 
                                         colors=TextFieldDefaults.colors(
@@ -638,7 +636,7 @@ class MainActivity : ComponentActivity() {
 
                                         onValueChange = {
                                             if (it.length <= maxVoteLength) textTyped = it
-                                            else Toast.makeText(myContext, "Max numbers of characters is $maxVoteLength",Toast.LENGTH_SHORT).show()
+                                            else Toast.makeText(myContext, getString(R.string.max_chars_error)+" $maxVoteLength",Toast.LENGTH_SHORT).show()
                                         },
 
                                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences),
@@ -916,7 +914,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        Log.d("###"," onPause")
+        // Log.d("###"," onPause")
 
         timerScreenOn = false
         timerLocOn = false
@@ -928,14 +926,14 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onStop() {
 
-        Log.d("###"," onStop")
+        // Log.d("###"," onStop")
         super.onStop()
     }
 
     @CallSuper
     override fun onDestroy() {
 
-        Log.d("###"," onDestroy")
+        // Log.d("###"," onDestroy")
 
         timerProcess.cancel()
         timerLoc.cancel()

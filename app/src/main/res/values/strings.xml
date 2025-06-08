@@ -1,3 +1,7 @@
 <resources>
-    <string name="app_name">Shout!</string>
+    <string name="app_name" translatable="false">Shout!</string>
+    <string name="input_field">Select from below or add new</string>
+    <string name="location_error">Location settings error, using approximate values</string>
+    <string name="permission_error">Cannot start without required permissions</string>
+    <string name="max_chars_error">Max numbers of characters is</string>
 </resources>
