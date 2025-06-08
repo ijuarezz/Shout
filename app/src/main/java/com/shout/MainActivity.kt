@@ -9,10 +9,12 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
@@ -48,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -55,8 +59,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -87,17 +96,19 @@ import java.util.TimerTask
 
 
 // *******************  CONSTANTS   *******************
-// const val screenFreq: Long = 5 * 1000   //  5 sec
 const val screenFreq: Long = 1 * 1000   //  1 sec
+// const val screenFreq: Long = 5 * 1000   //  5 sec
 const val locFreq: Long = 60 * 1000   //  1 min
 
-// const val tooOldDuration: Long = 3 * 60   //  3 mins
-const val tooOldDuration: Long = 10   //  10 SECS
+const val tooOldDuration: Long = 2 * 60   //  2 mins
+//const val tooOldDuration: Long = 10   //  10 SECS
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
 
 const val sep = "╚"
 const val emptyVote = "<no vote>"
+
+const val barUnicode = "\u275a"
 
 class MainActivity : ComponentActivity() {
 
@@ -505,6 +516,9 @@ class MainActivity : ComponentActivity() {
 
     // *******************  UI   *******************
 
+
+
+
     private fun myUI() {
 
         setContent {
@@ -528,7 +542,24 @@ class MainActivity : ComponentActivity() {
                 if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toList()
                 else votesSummary.toList().sortedBy { (k, _) -> k }.toList()
 
-            // // log("###","myUI    votesSorted   $votesSorted")
+            // For Back Gesture to works as Back button
+            BackHandler(true) { finish() }
+
+            /*
+            val scope = rememberCoroutineScope()
+            val isBackPressed = remember { mutableStateOf(false) }
+            BackHandler(!isBackPressed.value) {
+                isBackPressed.value = true
+                Toast.makeText(myContext, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                scope.launch {
+                    delay(2000L)
+                    isBackPressed.value = false
+                }
+            }
+
+            */
+
+
 
             AppTheme {
 
@@ -538,8 +569,6 @@ class MainActivity : ComponentActivity() {
                         .background(MaterialTheme.colorScheme.background)
 
                 ){
-
-
                     Scaffold(
                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 40.dp),
                         topBar = {
@@ -638,24 +667,80 @@ class MainActivity : ComponentActivity() {
                         },
                         bottomBar = {
 
-                            Row(
+                            val fullVotes = votesSorted.count()
+                            val emptyEndpoints = endpointsList.count() + 1 - fullVotes
+
+                            Card(
+
+                                colors= cardColors(containerColor = MaterialTheme.colorScheme.background,contentColor = MaterialTheme.colorScheme.background),
+
                                 modifier = Modifier
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
                                     .fillMaxWidth()
-                                    .height(IntrinsicSize.Min),
-                                horizontalArrangement = Arrangement.Absolute.Center
+                                    .height(IntrinsicSize.Min)
+                                    .wrapContentHeight()
 
-                            ){
+                        ) {
 
-                                //(myVote!= emptyVote).compareTo(false)
+                            Row(
+
+                                modifier = Modifier
+                                    //.padding(all = 8.dp)
+                                    .background(color = MaterialTheme.colorScheme.background),
+                                verticalAlignment =  Alignment.CenterVertically
+
+
+                            ) {
+
                                 Text(
-                                    text = "${votesSorted.count()} of ${endpointsList.count()+1}",
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    // fontSize = 20.sp,   or TextUnit.Unspecified ?
-                                    modifier = Modifier.padding(all = 9.dp),
+                                    buildAnnotatedString {
+                                        withStyle(style = SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primaryContainer)) {
+                                            append(barUnicode.repeat(fullVotes))
+                                        }
+                                        withStyle(style = SpanStyle(fontSize = 22.sp, color = MaterialTheme.colorScheme.surfaceVariant)) {
+                                            append(barUnicode.repeat(emptyEndpoints))
+                                        }
+                                    }
                                 )
-
                             }
 
+                        }
+
+
+
+
+                            /*
+                                                        Row(
+                                                            horizontalArrangement = Arrangement.Absolute.Left,
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .height(IntrinsicSize.Min)
+                                                                .border(1.dp, MaterialTheme.colorScheme.surfaceVariant,shape = RoundedCornerShape(10.dp))
+                                                                .padding(horizontal = 6.dp)
+                                                            ,
+
+
+
+                                                        ){
+
+                                                            //(myVote!= emptyVote).compareTo(false)
+                                                            val fullVotes = votesSorted.count()
+                                                            val emptyEndpoints = endpointsList.count() + 1 - fullVotes
+
+
+                                                            Text(
+                                                                buildAnnotatedString {
+                                                                    withStyle(style = SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primaryContainer)) {
+                                                                        append(barUnicode.repeat(fullVotes))
+                                                                    }
+                                                                    withStyle(style = SpanStyle(fontSize = 22.sp, color = MaterialTheme.colorScheme.surfaceVariant)) {
+                                                                        append(barUnicode.repeat(emptyEndpoints))
+                                                                    }
+                                                                }
+                                                            )
+
+                                                        }
+                            */
                         },
                         content = { paddingValues ->
 
@@ -752,6 +837,7 @@ class MainActivity : ComponentActivity() {
 
     }
 
+
     // *******************  LIFECYCLE   *******************
 
     @SuppressLint("MissingPermission")
@@ -827,7 +913,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        // Log.d("###"," onPause")
+        Log.d("###"," onPause")
 
         timerScreenOn = false
         timerLocOn = false
