@@ -14,9 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -28,11 +26,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardColors
+import androidx.compose.material3.CardDefaults.outlinedCardBorder
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -51,7 +49,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -64,7 +61,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -673,6 +669,7 @@ class MainActivity : ComponentActivity() {
                             Card(
 
                                 colors= cardColors(containerColor = MaterialTheme.colorScheme.background,contentColor = MaterialTheme.colorScheme.background),
+                                border= outlinedCardBorder(true),
 
                                 modifier = Modifier
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -682,7 +679,22 @@ class MainActivity : ComponentActivity() {
 
                         ) {
 
-                            Row(
+                                Text(
+
+                                    text = buildAnnotatedString {
+                                        withStyle(style = SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primaryContainer)) {
+                                            append(barUnicode.repeat(fullVotes))
+                                        }
+                                        withStyle(style = SpanStyle(fontSize = 22.sp, color = MaterialTheme.colorScheme.surfaceVariant)) {
+                                            append(barUnicode.repeat(emptyEndpoints))
+                                        }
+                                    },
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                )
+
+/*
+
+                                Row(
 
                                 modifier = Modifier
                                     //.padding(all = 8.dp)
@@ -692,17 +704,8 @@ class MainActivity : ComponentActivity() {
 
                             ) {
 
-                                Text(
-                                    buildAnnotatedString {
-                                        withStyle(style = SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primaryContainer)) {
-                                            append(barUnicode.repeat(fullVotes))
-                                        }
-                                        withStyle(style = SpanStyle(fontSize = 22.sp, color = MaterialTheme.colorScheme.surfaceVariant)) {
-                                            append(barUnicode.repeat(emptyEndpoints))
-                                        }
-                                    }
-                                )
                             }
+ */
 
                         }
 
