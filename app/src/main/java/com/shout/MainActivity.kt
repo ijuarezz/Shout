@@ -117,6 +117,8 @@ class MainActivity : ComponentActivity() {
     private var myId: String = ""
     private var myVote=emptyVote
 
+    private var votesCount:Int=0
+    private var noVotesCount:Int=0
 
     private var fusedLocationClient: FusedLocationProviderClient? = null
     private val strategy = Strategy.P2P_CLUSTER
@@ -176,7 +178,7 @@ class MainActivity : ComponentActivity() {
                 // Log.d("###", "========     before $idToVote")
                 // Log.d("###", "========     before $votesSummary")
                 idToVote.remove(lostId)
-
+                votesCount--
 
 
                 if(lostVoteCount>0) {   // update counter
@@ -236,8 +238,19 @@ class MainActivity : ComponentActivity() {
                 if (thisVote != lastVote) { // vote changed
 
 
-                    // Log.d("###", "========       vote changed")
-                    if(thisVote!= emptyVote) votesSummary[thisVote] = (votesSummary[thisVote]?:0) + 1  // change null to 0
+                    if(thisVote== emptyVote) {
+                        noVotesCount++
+                        votesCount--
+                    }
+                    else{
+                        votesSummary[thisVote] = (votesSummary[thisVote]?:0) + 1
+                    }
+
+                    if(lastVote== emptyVote) {
+                        noVotesCount--
+                        votesCount++
+                    }
+
 
                     lastVoteCount = (votesSummary[lastVote]?:0)-1   // decrease counter for lastVote
 
@@ -255,7 +268,14 @@ class MainActivity : ComponentActivity() {
             }
 
             else{  // new voter
-                if(thisVote!= emptyVote) votesSummary[thisVote] = (votesSummary[thisVote]?:0) + 1  // change null to 0
+
+                if(thisVote== emptyVote) {
+                    noVotesCount++
+                }
+                else{
+                    votesCount++
+                    votesSummary[thisVote] = (votesSummary[thisVote]?:0) + 1
+                }
 
             }
 
@@ -267,13 +287,11 @@ class MainActivity : ComponentActivity() {
 
         if (!timerScreenOn) {return}
 
-        // Log.d("###","   TimerTask running:       broadcastUpdate   myUI()")
-
+        // check counters before calling UI
+        if (noVotesCount<0) noVotesCount=0
+        if (votesCount<0) votesCount=0
 
         myUI()
-
-        // Old broadcastUpdate()
-
 
         if (endpointsList.isEmpty()) {return}
 
@@ -661,13 +679,11 @@ class MainActivity : ComponentActivity() {
                         },
                         bottomBar = {
 
-                            val fullVotes = votesSorted.count()
-                            val emptyEndpoints = endpointsList.count() + 1 - fullVotes
-
                             Card(
 
                                 colors= cardColors(containerColor = MaterialTheme.colorScheme.background,contentColor = MaterialTheme.colorScheme.background),
                                 border= outlinedCardBorder(true),
+                                onClick = {Toast.makeText(myContext, getString(R.string.input_field),Toast.LENGTH_SHORT).show()},
 
                                 modifier = Modifier
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -675,73 +691,22 @@ class MainActivity : ComponentActivity() {
                                     .height(IntrinsicSize.Min)
                                     .wrapContentHeight()
 
-                        ) {
+                            ) {
 
                                 Text(
 
                                     text = buildAnnotatedString {
                                         withStyle(style = SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primaryContainer)) {
-                                            append(barUnicode.repeat(fullVotes))
+                                            append(barUnicode.repeat(votesCount))
                                         }
                                         withStyle(style = SpanStyle(fontSize = 22.sp, color = MaterialTheme.colorScheme.surfaceVariant)) {
-                                            append(barUnicode.repeat(emptyEndpoints))
+                                            append(barUnicode.repeat(noVotesCount))
                                         }
                                     },
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 )
-
-/*
-
-                                Row(
-
-                                modifier = Modifier
-                                    //.padding(all = 8.dp)
-                                    .background(color = MaterialTheme.colorScheme.background),
-                                verticalAlignment =  Alignment.CenterVertically
-
-
-                            ) {
-
                             }
- */
 
-                        }
-
-
-
-
-                            /*
-                                                        Row(
-                                                            horizontalArrangement = Arrangement.Absolute.Left,
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .height(IntrinsicSize.Min)
-                                                                .border(1.dp, MaterialTheme.colorScheme.surfaceVariant,shape = RoundedCornerShape(10.dp))
-                                                                .padding(horizontal = 6.dp)
-                                                            ,
-
-
-
-                                                        ){
-
-                                                            //(myVote!= emptyVote).compareTo(false)
-                                                            val fullVotes = votesSorted.count()
-                                                            val emptyEndpoints = endpointsList.count() + 1 - fullVotes
-
-
-                                                            Text(
-                                                                buildAnnotatedString {
-                                                                    withStyle(style = SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primaryContainer)) {
-                                                                        append(barUnicode.repeat(fullVotes))
-                                                                    }
-                                                                    withStyle(style = SpanStyle(fontSize = 22.sp, color = MaterialTheme.colorScheme.surfaceVariant)) {
-                                                                        append(barUnicode.repeat(emptyEndpoints))
-                                                                    }
-                                                                }
-                                                            )
-
-                                                        }
-                            */
                         },
                         content = { paddingValues ->
 
