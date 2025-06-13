@@ -17,11 +17,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.absolutePadding
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -605,17 +610,17 @@ class MainActivity : ComponentActivity() {
                                 Row(
 
                                     modifier = Modifier
-                                        //.padding(all = 8.dp)
+                                        .padding(horizontal = 4.dp)
                                         .background(color = tallyColor),
-                                        verticalAlignment =  Alignment.CenterVertically
-
-
                                 ) {
 
-
                                     Text(
-                                        modifier = Modifier.clickable { focusRequester.requestFocus()},
-                                        text = "   +",
+                                        modifier = Modifier
+                                            .absolutePadding(top = 9.dp, bottom = 9.dp, left=10.dp)
+                                            .defaultMinSize(minWidth = 16.dp)
+                                            .align(Alignment.CenterVertically)
+                                            .clickable { focusRequester.requestFocus()},
+                                        text = "+",
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         maxLines = Int.MAX_VALUE,
                                         fontSize = 20.sp,
@@ -672,7 +677,6 @@ class MainActivity : ComponentActivity() {
 
 
                                     )
-
                                 }
                             }
 
@@ -724,13 +728,6 @@ class MainActivity : ComponentActivity() {
 
                                     Card(
                                         colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
-                                        onClick = {
-
-                                                myVote = if (myVote == eachTally.first) emptyVote else eachTally.first
-                                                runBlocking {voteChannel.send(IdVote(myId,myVote))}
-
-                                        },
-
                                         modifier = Modifier
                                             .padding(horizontal = 16.dp, vertical = 4.dp)
                                             .fillMaxWidth()
@@ -740,32 +737,57 @@ class MainActivity : ComponentActivity() {
                                         Row(
 
                                             modifier = Modifier
-                                                .padding(all = 8.dp)
+                                                .padding(horizontal = 4.dp, vertical = 4.dp)
                                                 .background(color = tallyColor)
 
                                         ) {
 
                                             Text(
+
                                                 text = eachTally.second.toString(),
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.padding(all = 9.dp),
+                                                modifier = Modifier
+                                                    .absolutePadding(top = 9.dp, bottom = 9.dp, left=10.dp)
+                                                    .defaultMinSize(minWidth = 16.dp),
                                                 maxLines = Int.MAX_VALUE,
                                                 )
 
-                                            /*
                                             Spacer(
                                                 modifier = Modifier
                                                     .fillMaxHeight()
-                                                    .width(8.dp)
+                                                    .width(14.dp)
                                             )
-                                            */
+
 
                                             Text(
                                                 text = eachTally.first,
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.padding(all = 9.dp),
+                                                modifier = Modifier
+                                                    .padding(vertical = 9.dp)
+                                                    .weight(1f),
+                                                maxLines = Int.MAX_VALUE,
+
+                                            )
+
+                                            Spacer(
+                                                modifier = Modifier
+                                                    .fillMaxHeight()
+                                                    .width(4.dp)
+                                            )
+
+                                            Text(
+                                                text = "\u2715",
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier
+                                                    .padding(all = 9.dp)
+                                                    .clickable {
+                                                            myVote = if (myVote == eachTally.first) emptyVote else eachTally.first
+                                                            runBlocking {voteChannel.send(IdVote(myId,myVote))}
+                                                    },
                                                 maxLines = Int.MAX_VALUE,
                                             )
+
                                         }
                                     }
 
