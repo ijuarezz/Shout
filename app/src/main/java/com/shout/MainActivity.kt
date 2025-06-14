@@ -13,7 +13,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
-import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -33,7 +32,6 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
@@ -738,9 +736,6 @@ class MainActivity : ComponentActivity() {
                         },
                         content = { paddingValues ->
 
-                            val state = rememberLazyListState()
-
-
                             LazyColumn(
                                 contentPadding = paddingValues,
                                 modifier = Modifier.background(MaterialTheme.colorScheme.background)
@@ -846,15 +841,6 @@ class MainActivity : ComponentActivity() {
                                 }
 
                             }
-
-
-                            VerticalScrollbar(
-                                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-                                adapter = rememberScrollbarAdapter(
-                                    scrollState = state
-                                )
-                            )
-
 
                         },
                         floatingActionButton = {
