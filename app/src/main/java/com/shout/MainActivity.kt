@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -31,7 +30,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
@@ -234,9 +232,7 @@ class MainActivity : ComponentActivity() {
 
             val it = voteChannel.receive()
 
-            // todo remove, test only
-            // val thisVote = it.vote
-            val thisVote = System.currentTimeMillis().toString()
+            val thisVote = it.vote
 
 
             idToTime[it.id] = System.currentTimeMillis()/1000
@@ -291,11 +287,7 @@ class MainActivity : ComponentActivity() {
 
             }
 
-            // todo remove, test only
-            // idToVote[it.id] = thisVote
-            idToVote[it.id] = System.currentTimeMillis().toString()
-
-
+            idToVote[it.id] = thisVote
         }
 
 
@@ -606,97 +598,108 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 40.dp),
                         topBar = {
 
+
                             tallyColor = if(myVote == emptyVote){
                                 MaterialTheme.colorScheme.primaryContainer
                             } else{
                                 MaterialTheme.colorScheme.surfaceVariant
                             }
 
-                            Card(
 
-                                colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
 
-                                modifier = Modifier
-                                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                                    .fillMaxWidth()
-                                    .height(IntrinsicSize.Min)
-                                    .wrapContentHeight()
-                            ) {
+                                Card(
 
-                                Row(
+                                    colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
 
                                     modifier = Modifier
-                                        .padding(horizontal = 4.dp)
-                                        .background(color = tallyColor),
+                                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Min)
+                                        .wrapContentHeight()
                                 ) {
 
-                                    Text(
+                                    Row(
+
                                         modifier = Modifier
-                                            .absolutePadding(top = 9.dp, bottom = 9.dp, left=10.dp)
-                                            .defaultMinSize(minWidth = 16.dp)
-                                            .align(Alignment.CenterVertically)
-                                            .clickable { focusRequester.requestFocus()},
-                                        text = "+",
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        maxLines = Int.MAX_VALUE,
-                                        fontSize = 20.sp,
+                                            .padding(horizontal = 4.dp)
+                                            .background(color = tallyColor),
+                                    ) {
+
+                                        Text(
+                                            modifier = Modifier
+                                                .absolutePadding(top = 9.dp, bottom = 9.dp, left=10.dp)
+                                                .defaultMinSize(minWidth = 16.dp)
+                                                .align(Alignment.CenterVertically)
+                                                .clickable { focusRequester.requestFocus()},
+                                            text = "+",
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            maxLines = Int.MAX_VALUE,
+                                            fontSize = 20.sp,
 
 
-                                    )
+                                            )
 
 
-                                    TextField(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .focusRequester(focusRequester)
-                                            .onKeyEvent {
-                                                if (it.key == Key.Back) {
-                                                    keyboardController?.hide()
-                                                    focusManager.clearFocus()
-                                                    true
-                                                } else {
-                                                    false
-                                                }
+                                        TextField(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .focusRequester(focusRequester)
+                                                .onKeyEvent {
+                                                    if (it.key == Key.Back) {
+                                                        keyboardController?.hide()
+                                                        focusManager.clearFocus()
+                                                        true
+                                                    } else {
+                                                        false
+                                                    }
+                                                },
+
+                                            value = textTyped,
+                                            placeholder = { Text(getString(R.string.input_field)) },
+                                            singleLine = true,
+
+                                            colors=TextFieldDefaults.colors(
+                                                focusedContainerColor = tallyColor,
+                                                unfocusedContainerColor = tallyColor,
+
+                                                focusedIndicatorColor = Color.Transparent,
+                                                unfocusedIndicatorColor = Color.Transparent,
+                                                disabledIndicatorColor = Color.Transparent
+                                            ),
+
+
+                                            onValueChange = {
+                                                if (it.length <= maxVoteLength) textTyped = it
+                                                else Toast.makeText(myContext, getString(R.string.max_chars_error)+" $maxVoteLength",Toast.LENGTH_SHORT).show()
                                             },
 
-                                        value = textTyped,
-                                        placeholder = { Text(getString(R.string.input_field)) },
-                                        singleLine = true,
+                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences),
+                                            keyboardActions = KeyboardActions(
+                                                onDone = {
+                                                    keyboardController?.hide()
+                                                    focusManager.clearFocus()
+                                                    myVote = textTyped.trim()
+                                                    textTyped=""
+                                                    runBlocking {voteChannel.send(IdVote(myId,myVote))}
 
-                                        colors=TextFieldDefaults.colors(
-                                            focusedContainerColor = tallyColor,
-                                            unfocusedContainerColor = tallyColor,
-
-                                            focusedIndicatorColor = Color.Transparent,
-                                            unfocusedIndicatorColor = Color.Transparent,
-                                            disabledIndicatorColor = Color.Transparent
-                                        ),
-
-
-                                        onValueChange = {
-                                            if (it.length <= maxVoteLength) textTyped = it
-                                            else Toast.makeText(myContext, getString(R.string.max_chars_error)+" $maxVoteLength",Toast.LENGTH_SHORT).show()
-                                        },
-
-                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences),
-                                        keyboardActions = KeyboardActions(
-                                            onDone = {
-                                                keyboardController?.hide()
-                                                focusManager.clearFocus()
-                                                myVote = textTyped.trim()
-                                                textTyped=""
-                                                runBlocking {voteChannel.send(IdVote(myId,myVote))}
-
-                                            }
-                                        ),
+                                                }
+                                            ),
 
 
 
-                                    )
+                                            )
+                                    }
                                 }
-                            }
+
+
+
+
 
                         },
+
+
+
+
                         bottomBar = {
 
                             Card(
@@ -735,10 +738,11 @@ class MainActivity : ComponentActivity() {
 
                         },
                         content = { paddingValues ->
-
                             LazyColumn(
-                                contentPadding = paddingValues,
-                                modifier = Modifier.background(MaterialTheme.colorScheme.background)
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.background)
+                                    .padding(top = paddingValues.calculateTopPadding())
+
                             ) {
 
                                  items(votesSorted.toList()) { eachTally ->
