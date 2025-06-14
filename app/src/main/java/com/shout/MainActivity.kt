@@ -6,12 +6,14 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -30,9 +32,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardColors
 import androidx.compose.material3.CardDefaults.outlinedCardBorder
 import androidx.compose.material3.FabPosition
@@ -68,6 +73,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY
@@ -90,6 +96,8 @@ import com.google.android.gms.tasks.OnTokenCanceledListener
 import com.shout.ui.theme.AppTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.Timer
 import java.util.TimerTask
@@ -138,7 +146,7 @@ class MainActivity : ComponentActivity() {
 
     // *******************  CHANNELS   *******************
     val voteChannel = Channel<IdVote>(Channel.UNLIMITED)
-    val pointChannel = Channel<String>(Channel.UNLIMITED)
+    val endPointChannel = Channel<String>(Channel.UNLIMITED)
 
 
     // *******************  TIMERS   *******************
@@ -206,8 +214,8 @@ class MainActivity : ComponentActivity() {
 
 
         // update endpoints
-        while(!pointChannel.isEmpty){
-            val it = pointChannel.receive()
+        while(!endPointChannel.isEmpty){
+            val it = endPointChannel.receive()
 
             if(it.substring(0,1)=="+") {
                 endpointsList.add(it.substring(1,it.length))
@@ -227,16 +235,17 @@ class MainActivity : ComponentActivity() {
         while(!voteChannel.isEmpty){
 
             val it = voteChannel.receive()
-            val thisVote = it.vote
-            // Log.d("###", "======== addVotes  processing $thisVote ")
+
+            // todo remove, test only
+            // val thisVote = it.vote
+            val thisVote = System.currentTimeMillis().toString()
+
 
             idToTime[it.id] = System.currentTimeMillis()/1000
 
-            // Log.d("###", "========   idToVote  $idToVote")
 
             if(idToVote.containsKey(it.id)) { // voter exists
 
-                // Log.d("###", "========   voter exists")
 
                 lastVote = idToVote[it.id].toString()
 
@@ -284,7 +293,9 @@ class MainActivity : ComponentActivity() {
 
             }
 
-            idToVote[it.id] = thisVote
+            // todo remove, test only
+            // idToVote[it.id] = thisVote
+            idToVote[it.id] = System.currentTimeMillis().toString()
 
 
         }
@@ -335,19 +346,26 @@ class MainActivity : ComponentActivity() {
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
 
-            // Log.d("###","onEndpointFound from $endpointId")
-            runBlocking {pointChannel.send("+$endpointId")}
+            runBlocking {endPointChannel.send("+$endpointId")}
 
-            // Log.d("###", "onEndpointFound <<< requesting connection >>>")
-            connectionsClient.requestConnection(
-                myId,
-                endpointId,
-                connectionLifecycleCallback
-            )
+            lifecycleScope.launch {
+
+                // to avoid collisions
+                if(myId.toLong()<info.endpointName.toLong()) runBlocking{
+                    delay(200L)
+                }
+                connectionsClient.requestConnection(
+                    myId,
+                    endpointId,
+                    connectionLifecycleCallback
+                )
+            }
+
+
         }
         override fun onEndpointLost(endpointId: String) {
             // Log.d("###","onEndpointLost  $endpointId")
-            runBlocking {pointChannel.send("-$endpointId")}
+            runBlocking {endPointChannel.send("-$endpointId")}
         }
     }
 
@@ -687,7 +705,13 @@ class MainActivity : ComponentActivity() {
 
                                 colors= cardColors(containerColor = MaterialTheme.colorScheme.background,contentColor = MaterialTheme.colorScheme.background),
                                 border= outlinedCardBorder(true),
-                                onClick = {Toast.makeText(myContext, getString(R.string.input_field),Toast.LENGTH_SHORT).show()},
+                                elevation = CardDefaults.elevatedCardElevation(),
+
+                                // elevation = cardElevation(defaultElevation = 10.dp),
+
+                                onClick = {Toast.makeText(myContext,
+                                    "\u2611 $votesCount    \u2610 $noVotesCount",
+                                    Toast.LENGTH_SHORT).show()},
 
                                 modifier = Modifier
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -714,23 +738,39 @@ class MainActivity : ComponentActivity() {
                         },
                         content = { paddingValues ->
 
+                            val state = rememberLazyListState()
+
+
                             LazyColumn(
                                 contentPadding = paddingValues,
                                 modifier = Modifier.background(MaterialTheme.colorScheme.background)
                             ) {
 
                                  items(votesSorted.toList()) { eachTally ->
-                                    tallyColor = if(myVote == eachTally.first){
+
+                                    val thisVote= eachTally.first
+                                    val sameVote = (myVote==thisVote)
+
+                                    tallyColor = if(sameVote){
                                         MaterialTheme.colorScheme.primaryContainer
                                     } else{
                                         MaterialTheme.colorScheme.surfaceVariant
                                     }
+
+
 
                                     Card(
                                         colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
                                         modifier = Modifier
                                             .padding(horizontal = 16.dp, vertical = 4.dp)
                                             .fillMaxWidth()
+                                            .clickable {
+                                                    if (!sameVote) {
+                                                        myVote = thisVote
+                                                        runBlocking {voteChannel.send(IdVote(myId,myVote))}
+                                                    }
+
+                                            }
 
                                     ) {
 
@@ -746,10 +786,11 @@ class MainActivity : ComponentActivity() {
 
                                                 text = eachTally.second.toString(),
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                maxLines = Int.MAX_VALUE,
                                                 modifier = Modifier
                                                     .absolutePadding(top = 9.dp, bottom = 9.dp, left=10.dp)
                                                     .defaultMinSize(minWidth = 16.dp),
-                                                maxLines = Int.MAX_VALUE,
+
                                                 )
 
                                             Spacer(
@@ -760,7 +801,7 @@ class MainActivity : ComponentActivity() {
 
 
                                             Text(
-                                                text = eachTally.first,
+                                                text = thisVote,
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                 modifier = Modifier
                                                     .padding(vertical = 9.dp)
@@ -769,24 +810,34 @@ class MainActivity : ComponentActivity() {
 
                                             )
 
-                                            Spacer(
-                                                modifier = Modifier
-                                                    .fillMaxHeight()
-                                                    .width(4.dp)
-                                            )
+                                            if (sameVote){
 
-                                            Text(
-                                                text = "\u2715",
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier
-                                                    .padding(all = 9.dp)
-                                                    .clickable {
-                                                            myVote = if (myVote == eachTally.first) emptyVote else eachTally.first
+                                                Spacer(
+                                                    modifier = Modifier
+                                                        .fillMaxHeight()
+                                                        .width(4.dp)
+                                                )
+
+
+
+                                                Text(
+
+                                                    text = "\u2715",
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    maxLines = Int.MAX_VALUE,
+                                                    modifier = Modifier
+                                                        .padding(all = 9.dp)
+                                                        .clickable {
+                                                            myVote = emptyVote
                                                             runBlocking {voteChannel.send(IdVote(myId,myVote))}
-                                                    },
-                                                maxLines = Int.MAX_VALUE,
-                                            )
+                                                        }
+
+                                                )
+                                            }
+
+
+
 
                                         }
                                     }
@@ -795,6 +846,15 @@ class MainActivity : ComponentActivity() {
                                 }
 
                             }
+
+
+                            VerticalScrollbar(
+                                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+                                adapter = rememberScrollbarAdapter(
+                                    scrollState = state
+                                )
+                            )
+
 
                         },
                         floatingActionButton = {
