@@ -437,25 +437,34 @@ class MainActivity : ComponentActivity() {
 
     private fun checkPermissions() {
 
-
-        val votePermissions: Array<String>
-
-        if (Build.VERSION.SDK_INT > 30) {
-            //Permissions Android 12 (31)
-            votePermissions = arrayOf(
-                Manifest.permission.NFC,
+        var votePermissions =
+            arrayOf(
                 Manifest.permission.BLUETOOTH,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+            )
+
+        if (Build.VERSION.SDK_INT >= 31) {
+            votePermissions+= arrayOf(
+                Manifest.permission.NFC,
                 Manifest.permission.BLUETOOTH_ADMIN,
                 Manifest.permission.BLUETOOTH_ADVERTISE,
                 Manifest.permission.BLUETOOTH_CONNECT,
                 Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.ACCESS_COARSE_LOCATION,
-                Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.ACCESS_WIFI_STATE,
                 Manifest.permission.CHANGE_WIFI_STATE,
+            )
+        }
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            votePermissions+= arrayOf(
                 Manifest.permission.NEARBY_WIFI_DEVICES,
             )
-        } else {
+        }
+
+        /*
+
+        else {
             //Permissions older devices
             votePermissions =
                 arrayOf(
@@ -466,7 +475,9 @@ class MainActivity : ComponentActivity() {
 
         }
 
-        // ce ACCESS_FINE_LOCATION, BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, BLUETOOTH_SCAN and READ_EXTERNAL_STORAGE
+        // ACCESS_FINE_LOCATION, BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, BLUETOOTH_SCAN and READ_EXTERNAL_STORAGE
+
+         */
 
 
         var needPermission = "None"
@@ -599,7 +610,7 @@ class MainActivity : ComponentActivity() {
 
                 ){
                     Scaffold(
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 40.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 40.dp),
                         topBar = {
 
 
