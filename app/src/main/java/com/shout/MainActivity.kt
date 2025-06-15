@@ -466,6 +466,8 @@ class MainActivity : ComponentActivity() {
 
         }
 
+        // ce ACCESS_FINE_LOCATION, BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, BLUETOOTH_SCAN and READ_EXTERNAL_STORAGE
+
 
         var needPermission = "None"
 
@@ -552,7 +554,9 @@ class MainActivity : ComponentActivity() {
             var tallyColor: Color
 
             val focusRequester = remember { FocusRequester() }
-            val mySortByVote = rememberSaveable { mutableStateOf(true) }
+
+            // Todo  Is uiSortByVote really required ?
+            val uiSortByVote = rememberSaveable { mutableStateOf(true) }
 
 
             var textTyped by rememberSaveable { mutableStateOf("") }
@@ -655,7 +659,7 @@ class MainActivity : ComponentActivity() {
                                                 },
 
                                             value = textTyped,
-                                            placeholder = { Text(getString(R.string.input_field)) },
+                                            placeholder = { Text(getString(R.string.placeholder)) },
                                             singleLine = true,
 
                                             colors=TextFieldDefaults.colors(
@@ -852,13 +856,13 @@ class MainActivity : ComponentActivity() {
                             FloatingActionButton(
                                 onClick = {
                                     sortByVote = !sortByVote
-                                    mySortByVote.value = !mySortByVote.value
+                                    uiSortByVote.value = !uiSortByVote.value
                                     }
                             ) {
 
                                 Icon(
 
-                                    painter = if (mySortByVote.value) painterResource(id = R.drawable.format_list_numbered_24px) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
+                                    painter = if (uiSortByVote.value) painterResource(id = R.drawable.format_list_numbered_24px) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
                                     contentDescription = "Change",
                                     modifier = Modifier.size(30.dp)
                                 )

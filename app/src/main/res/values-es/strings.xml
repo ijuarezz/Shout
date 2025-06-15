@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="input_field">Seleccionar o agregar un mensaje</string>
     <string name="location_error">Error de ubicación, usando valores por defecto</string>
     <string name="permission_error">No es posible instalar sin los permisos requeridos</string>
     <string name="max_chars_error">El número máximo de caracteres es</string>
+    <string name="placeholder">Grita algo (o elije un mensaje)</string>
 </resources>
