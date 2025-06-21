@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -104,8 +105,8 @@ const val screenFreq: Long = 1 * 1000   //  1 sec
 // const val screenFreq: Long = 5 * 1000   //  5 sec
 const val locFreq: Long = 60 * 1000   //  1 min
 
-const val tooOldDuration: Long = 2 * 60   //  2 mins
-//const val tooOldDuration: Long = 10   //  10 SECS
+// const val tooOldDuration: Long = 2 * 60   //  2 mins
+const val tooOldDuration: Long = 10   //  10 SECS
 const val maxDistance: Float = 10f  //   10 meters
 const val maxVoteLength: Int = 30   // 30 chars
 
@@ -215,11 +216,11 @@ class MainActivity : ComponentActivity() {
 
             if(it.substring(0,1)=="+") {
                 endpointsList.add(it.substring(1,it.length))
-                // Log.d("###", "======== endpoints  adding $it ")
+                Log.d("###", "======== endpoints  adding $it ")
                             }
             else{
                 endpointsList.remove(it.substring(1,it.length))
-                // Log.d("###", "======== endpoints  removing $it ")
+                Log.d("###", "======== endpoints  removing $it ")
             }
 
             // Log.d("###", "======== endpoints  list is ${endpointsList}")
@@ -317,7 +318,7 @@ class MainActivity : ComponentActivity() {
 
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
 
-            // Log.d("###","onConnectionInitiated from $endpointId")
+            Log.d("###","==== onConnectionInitiated from $endpointId  info: ${info.isIncomingConnection} ${info.endpointName} ${info.endpointInfo}")
             connectionsClient.acceptConnection(endpointId, payloadCallback)
 
 
@@ -325,10 +326,10 @@ class MainActivity : ComponentActivity() {
 
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            // Log.d("###","onConnectionResult   Result  $endpointId")
+            Log.d("###","====    onConnectionResult    $endpointId   result ${result.status} ")
         }
         override fun onDisconnected(endpointId: String) {
-            // Log.d("###","Disconnected  $endpointId")
+            Log.d("###","Disconnected  $endpointId")
         }
 
     }
@@ -336,14 +337,19 @@ class MainActivity : ComponentActivity() {
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
 
+            Log.d("###","onEndpointFound  endpointId: $endpointId  info: ${info.serviceId} ${info.endpointName} ${info.endpointInfo}")
+
             runBlocking {endPointChannel.send("+$endpointId")}
 
-            lifecycleScope.launch {
-
-                // to avoid collisions
+            runBlocking {      // to avoid collisions
                 if(myId.toLong()<info.endpointName.toLong()) runBlocking{
+                    Log.d("###","onEndpointFound  0.2 sec delay added")
                     delay(200L)
                 }
+            }
+
+            runBlocking {
+                Log.d("###","onEndpointFound  requestConnection sent")
                 connectionsClient.requestConnection(
                     myId,
                     endpointId,
@@ -351,10 +357,31 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            /*
+            lifecycleScope.launch {
+
+                // to avoid collisions
+                if(myId.toLong()<info.endpointName.toLong()) runBlocking{
+                    Log.d("###","onEndpointFound  0.2 sec delay added")
+                    delay(200L)
+                }
+                Log.d("###","onEndpointFound  requestConnection sent")
+                connectionsClient.requestConnection(
+                    myId,
+                    endpointId,
+                    connectionLifecycleCallback
+                )
+            }
+
+             */
+
+
+
+
 
         }
         override fun onEndpointLost(endpointId: String) {
-            // Log.d("###","onEndpointLost  $endpointId")
+            Log.d("###","onEndpointLost  $endpointId")
             runBlocking {endPointChannel.send("-$endpointId")}
         }
     }
@@ -365,7 +392,7 @@ class MainActivity : ComponentActivity() {
             val p = String(payload.asBytes()!!, Charsets.UTF_8)
             val aInfo :  List<String> = p.split(sep)
 
-            // Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
+            Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) {return}
@@ -395,14 +422,14 @@ class MainActivity : ComponentActivity() {
             if(newId.isEmpty() or newVote.isEmpty()) return
 
             // Add new vote
-            // Log.d("###","payloadCallback      ADDING TO CHANNEL p $p    aInfo $aInfo ")
+            Log.d("###","payloadCallback      ADDING TO CHANNEL p $p    aInfo $aInfo ")
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
 
 
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // Log.d("###","onPayload  TransferUpdate  endpointId: $endpointId")
+            Log.d("###","  onPayload  TransferUpdate  endpointId: $endpointId  update: ${update.status}  ${update.payloadId} ${update.bytesTransferred} ${update.totalBytes} ")
 
         }
     }
