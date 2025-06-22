@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -70,7 +69,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY
@@ -92,9 +90,9 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.OnTokenCanceledListener
 import com.shout.ui.theme.AppTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.Timer
 import java.util.TimerTask
@@ -177,7 +175,6 @@ class MainActivity : ComponentActivity() {
 
             if (iVote.value < tooOld) {  // remove vote & timestamp
 
-                // Log.d("###", "========     $iVote is too old")
                 iterator.remove()
 
                 val lostId = iVote.key
@@ -185,8 +182,6 @@ class MainActivity : ComponentActivity() {
                 val lostVoteCount = (votesSummary[lostVote]?:0)-1   // decrease counter for lostVote
 
 
-                // Log.d("###", "========     before $idToVote")
-                // Log.d("###", "========     before $votesSummary")
                 idToVote.remove(lostId)
                 votesCount--
 
@@ -200,14 +195,8 @@ class MainActivity : ComponentActivity() {
 
                 }
 
-                // Log.d("###", "========        after $idToVote")
-                // Log.d("###", "========        after $votesSummary")
-
             }
         }
-
-        // Log.d("###", ".........     idToVote $idToVote")
-        // Log.d("###", ".........     votesSummary $votesSummary")
 
 
         // update endpoints
@@ -216,19 +205,20 @@ class MainActivity : ComponentActivity() {
 
             if(it.substring(0,1)=="+") {
                 endpointsList.add(it.substring(1,it.length))
-                Log.d("###", "======== endpoints  adding $it ")
+                // Log.d("###", "======== endpoints  adding $it ")
                             }
             else{
                 endpointsList.remove(it.substring(1,it.length))
-                Log.d("###", "======== endpoints  removing $it ")
+                // Log.d("###", "======== endpoints  removing $it ")
             }
 
-            // Log.d("###", "======== endpoints  list is ${endpointsList}")
 
         }
 
 
         // process votes
+        val voteChannelTime = System.currentTimeMillis() /1000
+
         while(!voteChannel.isEmpty){
 
             val it = voteChannel.receive()
@@ -236,7 +226,7 @@ class MainActivity : ComponentActivity() {
             val thisVote = it.vote
 
 
-            idToTime[it.id] = System.currentTimeMillis()/1000
+            idToTime[it.id] = voteChannelTime
 
 
             if(idToVote.containsKey(it.id)) { // voter exists
@@ -302,12 +292,8 @@ class MainActivity : ComponentActivity() {
 
         if (endpointsList.isEmpty()) {return}
 
-        // Log.d("###","sending  $myVote to $endpointsList")
-
         val p = "$myId$sep$myLat$sep$myLong$sep$myVote"
         connectionsClient.sendPayload(endpointsList,Payload.fromBytes(p.toByteArray()))
-
-        // Log.d("###","broadcastUpdate  sending to  $endpointsList")
 
 
     }
@@ -318,7 +304,7 @@ class MainActivity : ComponentActivity() {
 
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
 
-            Log.d("###","==== onConnectionInitiated from $endpointId  info: ${info.isIncomingConnection} ${info.endpointName} ${info.endpointInfo}")
+            // Log.d("###","==== onConnectionInitiated from $endpointId  info: ${info.isIncomingConnection} ${info.endpointName} ${info.endpointInfo}")
             connectionsClient.acceptConnection(endpointId, payloadCallback)
 
 
@@ -326,10 +312,10 @@ class MainActivity : ComponentActivity() {
 
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            Log.d("###","====    onConnectionResult    $endpointId   result ${result.status} ")
+            // Log.d("###","====    onConnectionResult    $endpointId   result ${result.status} ")
         }
         override fun onDisconnected(endpointId: String) {
-            Log.d("###","Disconnected  $endpointId")
+            // Log.d("###","Disconnected  $endpointId")
         }
 
     }
@@ -337,19 +323,19 @@ class MainActivity : ComponentActivity() {
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
 
-            Log.d("###","onEndpointFound  endpointId: $endpointId  info: ${info.serviceId} ${info.endpointName} ${info.endpointInfo}")
+            //  Log.d("###","onEndpointFound  endpointId: $endpointId  info: ${info.serviceId} ${info.endpointName} ${info.endpointInfo}")
 
             runBlocking {endPointChannel.send("+$endpointId")}
 
             runBlocking {      // to avoid collisions
                 if(myId.toLong()<info.endpointName.toLong()) runBlocking{
-                    Log.d("###","onEndpointFound  0.2 sec delay added")
+                    // Log.d("###","onEndpointFound  0.2 sec delay added")
                     delay(200L)
                 }
             }
 
             runBlocking {
-                Log.d("###","onEndpointFound  requestConnection sent")
+                // Log.d("###","onEndpointFound  requestConnection sent")
                 connectionsClient.requestConnection(
                     myId,
                     endpointId,
@@ -357,31 +343,14 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
-            /*
-            lifecycleScope.launch {
-
-                // to avoid collisions
-                if(myId.toLong()<info.endpointName.toLong()) runBlocking{
-                    Log.d("###","onEndpointFound  0.2 sec delay added")
-                    delay(200L)
-                }
-                Log.d("###","onEndpointFound  requestConnection sent")
-                connectionsClient.requestConnection(
-                    myId,
-                    endpointId,
-                    connectionLifecycleCallback
-                )
-            }
-
-             */
-
+            //              lifecycleScope.launch
 
 
 
 
         }
         override fun onEndpointLost(endpointId: String) {
-            Log.d("###","onEndpointLost  $endpointId")
+            // Log.d("###","onEndpointLost  $endpointId")
             runBlocking {endPointChannel.send("-$endpointId")}
         }
     }
@@ -392,7 +361,7 @@ class MainActivity : ComponentActivity() {
             val p = String(payload.asBytes()!!, Charsets.UTF_8)
             val aInfo :  List<String> = p.split(sep)
 
-            Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
+            // Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) {return}
@@ -422,14 +391,14 @@ class MainActivity : ComponentActivity() {
             if(newId.isEmpty() or newVote.isEmpty()) return
 
             // Add new vote
-            Log.d("###","payloadCallback      ADDING TO CHANNEL p $p    aInfo $aInfo ")
+            // Log.d("###","payloadCallback      ADDING TO CHANNEL p $p    aInfo $aInfo ")
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
 
 
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            Log.d("###","  onPayload  TransferUpdate  endpointId: $endpointId  update: ${update.status}  ${update.payloadId} ${update.bytesTransferred} ${update.totalBytes} ")
+            // Log.d("###","  onPayload  TransferUpdate  endpointId: $endpointId  update: ${update.status}  ${update.payloadId} ${update.bytesTransferred} ${update.totalBytes} ")
 
         }
     }
@@ -937,13 +906,17 @@ class MainActivity : ComponentActivity() {
 
         // start Advertising
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
-        connectionsClient.startAdvertising(
-            myId,
-            packageName,
-            connectionLifecycleCallback,
-            advertisingOptions
-        )
 
+        runBlocking {
+            async{
+                connectionsClient.startAdvertising(
+                myId,
+                packageName,
+                connectionLifecycleCallback,
+                advertisingOptions
+                )
+            }
+        }
 
         // Recurring event to update Screen & Broadcast
         timerProcess.schedule(
