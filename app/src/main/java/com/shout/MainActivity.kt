@@ -103,10 +103,10 @@ const val screenFreq: Long = 1 * 1000   //  1 sec
 // const val screenFreq: Long = 5 * 1000   //  5 sec
 const val locFreq: Long = 60 * 1000   //  1 min
 
-// const val tooOldDuration: Long = 2 * 60   //  2 mins
-const val tooOldDuration: Long = 10   //  10 SECS
+const val tooOldDuration: Long = 2 * 60   //  2 mins
+// const val tooOldDuration: Long = 10   //  10 SECS
 const val maxDistance: Float = 10f  //   10 meters
-const val maxVoteLength: Int = 30   // 30 chars
+const val maxVoteLength: Int = 40   // 40 chars
 
 const val sep = "╚"
 const val emptyVote = "<no vote>"
