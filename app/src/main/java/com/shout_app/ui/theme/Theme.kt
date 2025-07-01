@@ -1,12 +1,12 @@
-package com.shout.ui.theme
+package com.shout_app.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalContext
-import com.google.accompanist.systemuicontroller.rememberSystemUiController
+// import com.google.accompanist.systemuicontroller.rememberSystemUiController
+// import androidx.compose.runtime.SideEffect
 
 
 private val LightColors = lightColorScheme(
@@ -99,6 +99,7 @@ fun AppTheme(
         }
     }
 
+/*
 
     val systemUiController = rememberSystemUiController()
     SideEffect {
@@ -109,6 +110,7 @@ fun AppTheme(
 
     }
 
+ */
 
 
     MaterialTheme(

@@ -1,4 +1,4 @@
-package com.shout
+package com.shout_app
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -88,7 +88,7 @@ import com.google.android.gms.nearby.connection.Strategy
 import com.google.android.gms.tasks.CancellationToken
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.OnTokenCanceledListener
-import com.shout.ui.theme.AppTheme
+import com.shout_app.ui.theme.AppTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel

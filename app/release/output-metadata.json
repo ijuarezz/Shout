@@ -4,7 +4,7 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "com.shout",
+  "applicationId": "com.shout_app",
   "variantName": "release",
   "elements": [
     {

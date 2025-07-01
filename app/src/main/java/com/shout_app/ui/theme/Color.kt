@@ -1,4 +1,4 @@
-package com.shout.ui.theme
+package com.shout_app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
