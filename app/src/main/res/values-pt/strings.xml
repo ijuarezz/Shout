@@ -4,4 +4,6 @@
     <string name="permission_error">Não é possível instalar sem as permissões necessárias</string>
     <string name="max_chars_error">O número máximo de caracteres é</string>
     <string name="placeholder">Grite algo (ou escolha uma msg)</string>
+    <string name="range_std">Alcance de audição padrão (10M)</string>
+    <string name="range_ext">Alcance de audição estendido (100M)</string>
 </resources>

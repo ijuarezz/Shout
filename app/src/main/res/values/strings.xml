@@ -4,4 +4,6 @@
     <string name="permission_error">Cannot start without required permissions</string>
     <string name="max_chars_error">Max numbers of characters is</string>
     <string name="placeholder">Add new (or select from below)</string>
+    <string name="range_std">Standard listening range (10M)</string>
+    <string name="range_ext">Extended listening range (100M)</string>
 </resources>

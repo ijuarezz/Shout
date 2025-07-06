@@ -96,6 +96,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.util.Timer
 import java.util.TimerTask
+import kotlin.Float.Companion.POSITIVE_INFINITY
 
 
 // *******************  CONSTANTS   *******************
@@ -105,7 +106,7 @@ const val locFreq: Long = 60 * 1000   //  1 min
 
 const val tooOldDuration: Long = 2 * 60   //  2 mins
 // const val tooOldDuration: Long = 10   //  10 SECS
-const val maxDistance: Float = 10f  //   10 meters
+
 const val maxVoteLength: Int = 40   // 40 chars
 
 const val sep = "╚"
@@ -120,10 +121,12 @@ class MainActivity : ComponentActivity() {
     data class IdVote(val id: String, val vote: String)
 
     // *******************  VARIABLES   *******************
+    var maxDistance = 10f  //   10 meters
     var myLat: Double = 0.0
     var myLong: Double = 0.0
     private var myId: String = ""
     private var myVote=emptyVote
+
 
     private var votesCount:Int=0
     private var noVotesCount:Int=0
@@ -131,10 +134,6 @@ class MainActivity : ComponentActivity() {
     private var fusedLocationClient: FusedLocationProviderClient? = null
     private val strategy = Strategy.P2P_CLUSTER
     private lateinit var connectionsClient: ConnectionsClient
-
-
-    // *******************  BOOLEANS   *******************
-    private var sortByVote: Boolean = true
 
     // todo
     // mutex for Loc ?
@@ -156,6 +155,8 @@ class MainActivity : ComponentActivity() {
     private var idToTime = mutableMapOf<String, Long>()
     private val votesSummary: MutableMap<String, Int> = HashMap()
     private val endpointsList = mutableListOf<String>()
+
+    private lateinit var votesSorted: List<Pair<String, Int>>
 
 
     // *******************  FUNCTIONS   *******************
@@ -282,7 +283,12 @@ class MainActivity : ComponentActivity() {
         }
 
 
-        if (!timerScreenOn) {return}
+        // sort by votes
+        votesSorted = votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toList()
+
+
+
+        if (!timerScreenOn) return
 
         // check counters before calling UI
         if ( (noVotesCount<1) && (myVote == emptyVote) )  noVotesCount=1
@@ -293,7 +299,7 @@ class MainActivity : ComponentActivity() {
 
         myUI()
 
-        if (endpointsList.isEmpty()) {return}
+        if (endpointsList.isEmpty()) return
 
         val p = "$myId$sep$myLat$sep$myLong$sep$myVote"
         connectionsClient.sendPayload(endpointsList,Payload.fromBytes(p.toByteArray()))
@@ -367,12 +373,12 @@ class MainActivity : ComponentActivity() {
             // Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
 
             // Check if 4 fields were received
-            if (aInfo.size != 4) {return}
+            if (aInfo.size != 4) return
 
             val newId: String = aInfo[0]
             val newLat: String = aInfo[1]
             val newLong: String = aInfo[2]
-            val newVote: String = aInfo[3]
+            var newVote: String = aInfo[3]
 
             val newLatD: Double = newLat.toDouble()
             val newLongD: Double = newLong.toDouble()
@@ -384,18 +390,14 @@ class MainActivity : ComponentActivity() {
             myLong = newLongD
             }
 
+            // Check for empty strings
+            if(newId.isEmpty() or newVote.isEmpty()) return
+
             // Check if within max distance
             val newDistance: FloatArray = floatArrayOf(0f)
             Location.distanceBetween(newLatD,newLongD, myLat,myLong,newDistance)
 
-            if (newDistance[0] > maxDistance){
-                Toast.makeText(this@MainActivity, "$newVote is too distant", Toast.LENGTH_LONG).show()
-                return
-            }
-
-
-            // Check for empty strings
-            if(newId.isEmpty() or newVote.isEmpty()) return
+            if (newDistance[0] > maxDistance) newVote=emptyVote
 
             // Add new vote
             // Log.d("###","payloadCallback      ADDING TO CHANNEL p $p    aInfo $aInfo ")
@@ -543,6 +545,7 @@ class MainActivity : ComponentActivity() {
         super.onSaveInstanceState(savedInstanceState)
         savedInstanceState.putString("myId", myId)
         savedInstanceState.putString("myVote", myVote)
+        savedInstanceState.putFloat("maxDistance", maxDistance)
 
 
     }
@@ -552,6 +555,7 @@ class MainActivity : ComponentActivity() {
 
         myId = savedInstanceState.getString("myId").toString()
         myVote = savedInstanceState.getString("myVote").toString()
+        maxDistance = savedInstanceState.getFloat("maxDistance")
 
     }
 
@@ -569,21 +573,14 @@ class MainActivity : ComponentActivity() {
 
             val focusRequester = remember { FocusRequester() }
 
-            // Todo  Is uiSortByVote really required ?
-            val uiSortByVote = rememberSaveable { mutableStateOf(true) }
-
-
             var textTyped by rememberSaveable { mutableStateOf("") }
+            var extendedMode by rememberSaveable { mutableStateOf(false) }
+
 
             val keyboardController = LocalSoftwareKeyboardController.current
             val focusManager = LocalFocusManager.current
             val myContext = LocalContext.current
 
-
-            // sort by either votes or alphabetically
-            val votesSorted =
-                if (sortByVote) votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toList()
-                else votesSummary.toList().sortedBy { (k, _) -> k }.toList()
 
             // For Back Gesture to works as Back button
             BackHandler(true) { finish() }
@@ -866,17 +863,28 @@ class MainActivity : ComponentActivity() {
 
                         },
                         floatingActionButton = {
-                            //todo replace Icons with single Icon ?
+
                             FloatingActionButton(
                                 onClick = {
-                                    sortByVote = !sortByVote
-                                    uiSortByVote.value = !uiSortByVote.value
+
+                                    extendedMode = !extendedMode
+
+                                    if(extendedMode){
+                                        maxDistance=POSITIVE_INFINITY
+                                        Toast.makeText(this@MainActivity, getString(R.string.range_ext), Toast.LENGTH_LONG).show()
                                     }
+                                    else {
+                                        maxDistance=10f
+                                        Toast.makeText(this@MainActivity, getString(R.string.range_std), Toast.LENGTH_LONG).show()
+                                    }
+
+
+                                }
                             ) {
 
                                 Icon(
 
-                                    painter = if (uiSortByVote.value) painterResource(id = R.drawable.format_list_numbered_24px) else painterResource(id = R.drawable.ic_baseline_sort_by_alpha_24),
+                                    painter = if (extendedMode) painterResource(id = R.drawable.spatial_tracking_24px) else painterResource(id = R.drawable.spatial_audio_off_24px) ,
                                     contentDescription = "Change",
                                     modifier = Modifier.size(30.dp)
                                 )
@@ -948,7 +956,7 @@ class MainActivity : ComponentActivity() {
 
             object : TimerTask() {
                 override fun run() {
-                    if (!timerLocOn) {return}
+                    if (!timerLocOn) return
                     runOnUiThread {
                         getLoc()}
                 }
