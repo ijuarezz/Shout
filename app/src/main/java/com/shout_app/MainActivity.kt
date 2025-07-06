@@ -183,16 +183,16 @@ class MainActivity : ComponentActivity() {
 
 
                 idToVote.remove(lostId)
-                votesCount--
+
+                if(lostVote == emptyVote) {noVotesCount--}
+                else{votesCount--}
 
 
                 if(lostVoteCount>0) {   // update counter
                     votesSummary[lostVote] = lostVoteCount
                 }
                 else{  // or delete lostVote
-
                     votesSummary.remove(lostVote)
-
                 }
 
             }
@@ -285,8 +285,11 @@ class MainActivity : ComponentActivity() {
         if (!timerScreenOn) {return}
 
         // check counters before calling UI
-        if (noVotesCount<0) noVotesCount=0
-        if (votesCount<0) votesCount=0
+        if ( (noVotesCount<1) && (myVote == emptyVote) )  noVotesCount=1
+
+        if ( (votesCount<1) && (myVote != emptyVote) )  votesCount=1
+
+
 
         myUI()
 
@@ -384,7 +387,11 @@ class MainActivity : ComponentActivity() {
             // Check if within max distance
             val newDistance: FloatArray = floatArrayOf(0f)
             Location.distanceBetween(newLatD,newLongD, myLat,myLong,newDistance)
-            if (newDistance[0] > maxDistance) return
+
+            if (newDistance[0] > maxDistance){
+                Toast.makeText(this@MainActivity, "$newVote is too distant", Toast.LENGTH_LONG).show()
+                return
+            }
 
 
             // Check for empty strings
