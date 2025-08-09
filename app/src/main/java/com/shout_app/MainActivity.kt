@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -15,6 +16,7 @@ import androidx.annotation.CallSuper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +32,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
@@ -44,11 +48,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -126,7 +132,7 @@ class MainActivity : ComponentActivity() {
     var myLong: Double = 0.0
     private var myId: String = ""
     private var myVote=emptyVote
-
+    private var playIntro: Boolean = true
 
     private var votesCount:Int=0
     private var noVotesCount:Int=0
@@ -296,8 +302,8 @@ class MainActivity : ComponentActivity() {
         if ( (votesCount<1) && (myVote != emptyVote) )  votesCount=1
 
 
-
-        myUI()
+        if (playIntro){ onBoarding() }
+        else { myUI() }
 
         if (endpointsList.isEmpty()) return
 
@@ -537,6 +543,14 @@ class MainActivity : ComponentActivity() {
             editor.apply()
         }
 
+        // Check playIntro
+        if (sharedPreference.contains("playIntro")) {
+            playIntro = sharedPreference.getString("playIntro", "true").toBoolean()
+        }
+        else {
+            editor.putString("playIntro", "true")
+            editor.apply()
+    }
 
 
     }
@@ -561,6 +575,87 @@ class MainActivity : ComponentActivity() {
 
     // *******************  UI   *******************
 
+    private fun onBoarding()  {
+
+        setContent {
+
+            AppTheme {
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+
+                ){
+
+                    val pageCount = 3 // Define the number of pages
+                    val pagerState = rememberPagerState(initialPage = 0, pageCount = { pageCount })
+
+
+                    Column(modifier = Modifier.fillMaxSize()) {
+
+
+                        LaunchedEffect(pagerState) {
+                            snapshotFlow { pagerState.currentPage }.collect { currentPage ->
+                                val isLastPage = currentPage == pagerState.pageCount - 1
+
+                                if (isLastPage) {
+                                    playIntro = false
+
+                                    val sharedPreference = getSharedPreferences("MyPreferences", MODE_PRIVATE)
+                                    val editor = sharedPreference.edit()
+
+                                    if (sharedPreference.contains("playIntro")) {
+                                        editor.putString("playIntro", "false")
+                                        editor.apply()
+
+                                    }
+
+
+                                }
+                            }
+                        }
+
+
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f) // Occupy available vertical space
+                        ) { page ->
+                            // Content for each page
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        when (page) {
+                                            0 -> Color.Red
+                                            1 -> Color.Green
+                                            2 -> Color.Blue
+                                            3 -> Color.Yellow
+                                            else -> Color.Magenta
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+
+                                Text(
+                                    text = "Page: $page",
+                                    fontSize = 32.sp,
+                                    color = Color.White
+                                )
+                            }
+
+                        }
+                    }
+
+
+                }
+            }
+
+        }
+
+    }
 
 
 
@@ -582,7 +677,7 @@ class MainActivity : ComponentActivity() {
             val myContext = LocalContext.current
 
 
-            // For Back Gesture to works as Back button
+            // For Back Gesture to work as Back button
             BackHandler(true) { finish() }
 
             /*
@@ -909,8 +1004,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Log.d("###"," onCreate")
-        checkPermissions()
+
+
+
         getMyPreferences()
+        checkPermissions()
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         connectionsClient = Nearby.getConnectionsClient(this)
