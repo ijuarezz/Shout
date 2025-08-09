@@ -51,8 +51,10 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -100,6 +102,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.Timer
 import java.util.TimerTask
@@ -302,9 +305,7 @@ class MainActivity : ComponentActivity() {
 
         if ( (votesCount<1) && (myVote != emptyVote) )  votesCount=1
 
-
-        if (playIntro){ onBoarding() }
-        else { myUI() }
+        myUI()
 
         if (endpointsList.isEmpty()) return
 
@@ -474,24 +475,6 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        /*
-
-        else {
-            //Permissions older devices
-            votePermissions =
-                arrayOf(
-                    Manifest.permission.BLUETOOTH,
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-            )
-
-        }
-
-        // ACCESS_FINE_LOCATION, BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, BLUETOOTH_SCAN and READ_EXTERNAL_STORAGE
-
-         */
-
-
         var needPermission = "None"
 
         votePermissions.forEach {
@@ -499,17 +482,14 @@ class MainActivity : ComponentActivity() {
             if (checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED) needPermission = it
         }
 
-
-        if (needPermission != "None") {
-
+        if (needPermission != "None"){
             val voteRequestPermission =
                 registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
 
                     if (isGranted) {
-
                         recreate()
-
-                    } else {
+                    }
+                    else {
 
                         Toast.makeText(this, getString(R.string.permission_error), Toast.LENGTH_LONG).show()
 
@@ -519,15 +499,12 @@ class MainActivity : ComponentActivity() {
                         runtime.exec("pm clear $packageName")
 
                         finish()
-
                     }
                 }
 
             voteRequestPermission.launch(needPermission)
 
         }
-
-
     }
 
     private fun getMyPreferences() {
@@ -556,6 +533,76 @@ class MainActivity : ComponentActivity() {
 
     }
 
+    private fun startNearby(){
+
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        connectionsClient = Nearby.getConnectionsClient(this)
+
+        // start Discovery
+        val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
+        connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
+
+        // start Advertising
+        val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
+
+        runBlocking {
+            async{
+                connectionsClient.startAdvertising(
+                    myId,
+                    packageName,
+                    connectionLifecycleCallback,
+                    advertisingOptions
+                )
+            }
+        }
+
+        // *******************  FLOW    *******************
+        startTimers()
+
+    }
+
+    private fun startTimers() {
+
+        // Recurring event to update Screen & Broadcast
+        timerProcess.schedule(
+            object : TimerTask() {
+
+                override fun run() {
+
+                    // Log.d("###"," TimerTask")
+
+                    runOnUiThread {
+                        runBlocking { voteChannel.send(IdVote(myId, myVote)) }
+                        runBlocking { process() }
+                    }
+                }
+            },
+            0,
+            screenFreq
+        )
+
+        // Recurring event to update Location
+        timerLoc.schedule(
+
+            object : TimerTask() {
+                override fun run() {
+                    if (!timerLocOn) return
+                    runOnUiThread {
+                        getLoc()
+                    }
+                }
+            },
+            0,
+            locFreq
+        )
+
+    }
+
+
+
+
+
+
     public override fun onSaveInstanceState(savedInstanceState: Bundle) {
         super.onSaveInstanceState(savedInstanceState)
         savedInstanceState.putString("myId", myId)
@@ -576,89 +623,126 @@ class MainActivity : ComponentActivity() {
 
     // *******************  UI   *******************
 
+
     private fun onBoarding()  {
 
-        setContent {
+        if(playIntro){
 
-            AppTheme {
+            setContent {
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
+                AppTheme {
 
-                ){
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
 
-                    val pageCount = 3 // Define the number of pages
-                    val pagerState = rememberPagerState(initialPage = 0, pageCount = { pageCount })
+                    )
 
+                    {
+                        val pagerState = rememberPagerState(initialPage = 0, pageCount = { 5 })
+                        val coroutineScope = rememberCoroutineScope()
 
-                    Column(modifier = Modifier.fillMaxSize()) {
+                        Scaffold(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 40.dp),
+                            topBar = {
 
+                                Text(
+                                    modifier = Modifier
+                                        .padding(all=10.dp)
+                                        .defaultMinSize(minWidth = 16.dp)
+                                        .align(Alignment.Center),
+                                    text = "Welcome to Shout!",
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    maxLines = Int.MAX_VALUE,
+                                    fontSize = 20.sp,
 
-                        LaunchedEffect(pagerState) {
-                            snapshotFlow { pagerState.currentPage }.collect { currentPage ->
-                                val isLastPage = currentPage == pagerState.pageCount - 1
-
-                                if (isLastPage) {
-                                    playIntro = false
-
-                                    val sharedPreference = getSharedPreferences("MyPreferences", MODE_PRIVATE)
-                                    val editor = sharedPreference.edit()
-
-                                    if (sharedPreference.contains("playIntro")) {
-                                        // todo remove these comments
-                                        //editor.putString("playIntro", "false")
-                                        //editor.apply()
-
-                                    }
+                                    )
 
 
+                            },
+                            bottomBar = {},
+                            content = { paddingValues ->
+
+
+                                HorizontalPager(
+                                    state = pagerState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.background)
+                                        .padding(all = paddingValues.calculateTopPadding())
+                                        //.weight(1f)
+                                ) { page ->
+
+                                        Image(
+                                           painter = painterResource(
+                                                id =
+                                                    when (page) {
+                                                        0 -> R.drawable.__basic
+                                                        1 -> R.drawable.__input
+                                                        2 -> R.drawable.__pizza
+                                                        3 -> R.drawable.__std_range
+                                                        4 -> R.drawable.__ext_range
+                                                        else -> R.drawable.__basic
+                                                    }
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
                                 }
-                            }
-                        }
 
+                            },
+                            floatingActionButton = {
 
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f) // Occupy available vertical space
-                        ) { page ->
-                            // Content for each page
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
+                                FloatingActionButton(
+                                    onClick = {
 
-                                    painter = painterResource(id=
-                                        when (page) {
-                                            0 -> R.drawable.__basic
-                                            1 -> R.drawable.__input
-                                            2 -> R.drawable.__pizza
-                                            3 -> R.drawable.__std_range
-                                            4 -> R.drawable.__ext_range
-                                            else -> R.drawable.__basic
+                                        if(pagerState.currentPage==4){
+
+                                            val sharedPreference =
+                                                getSharedPreferences("MyPreferences", MODE_PRIVATE)
+                                            val editor = sharedPreference.edit()
+
+                                            if (sharedPreference.contains("playIntro")) {
+                                                // todo remove these comments
+                                                //editor.putString("playIntro", "false")
+                                                //editor.apply()
+
+                                                // *******************  FLOW    *******************
+                                                startNearby()
+
+                                            }
+
                                         }
-                                    ),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize()
+                                        else {
+                                            coroutineScope.launch {
+                                                pagerState.scrollToPage(pagerState.currentPage+1)
+                                            }
+                                        }
+                                    }
+                                ) {
 
-                                )
+                                    Icon(
 
-                            }
+                                        painter = painterResource(id = R.drawable.spatial_tracking_24px),
+                                        contentDescription = "Change",
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
 
-                        }
+                            },
+                            floatingActionButtonPosition = FabPosition.Center
+                        )
                     }
 
-
                 }
+
             }
-
         }
-
+        else {
+            // *******************  FLOW    *******************
+            startNearby()
+        }
     }
 
 
@@ -1007,65 +1091,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Log.d("###"," onCreate")
-
-
-
         getMyPreferences()
         checkPermissions()
-
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        connectionsClient = Nearby.getConnectionsClient(this)
-
-        // start Discovery
-        val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
-        connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
-
-        // start Advertising
-        val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
-
-        runBlocking {
-            async{
-                connectionsClient.startAdvertising(
-                myId,
-                packageName,
-                connectionLifecycleCallback,
-                advertisingOptions
-                )
-            }
-        }
-
-        // Recurring event to update Screen & Broadcast
-        timerProcess.schedule(
-            object : TimerTask() {
-
-                override fun run() {
-
-                    // Log.d("###"," TimerTask")
-
-                    runOnUiThread {
-                        runBlocking {voteChannel.send(IdVote(myId,myVote))}
-                        runBlocking {process()}
-                    }
-                }
-            },
-            0,
-            screenFreq
-        )
-
-        // Recurring event to update Location
-        timerLoc.schedule(
-
-            object : TimerTask() {
-                override fun run() {
-                    if (!timerLocOn) return
-                    runOnUiThread {
-                        getLoc()}
-                }
-            },
-            0,
-            locFreq
-        )
+        onBoarding()
 
     }
 
@@ -1107,9 +1135,11 @@ class MainActivity : ComponentActivity() {
         timerProcess.cancel()
         timerLoc.cancel()
 
-        connectionsClient.stopAdvertising()
-        connectionsClient.stopAllEndpoints()
-        connectionsClient.stopDiscovery()
+        if (this::connectionsClient.isInitialized) {
+            connectionsClient.stopAdvertising()
+            connectionsClient.stopAllEndpoints()
+            connectionsClient.stopDiscovery()
+        }
 
         super.onDestroy()
     }
