@@ -13,6 +13,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -606,8 +607,9 @@ class MainActivity : ComponentActivity() {
                                     val editor = sharedPreference.edit()
 
                                     if (sharedPreference.contains("playIntro")) {
-                                        editor.putString("playIntro", "false")
-                                        editor.apply()
+                                        // todo remove these comments
+                                        //editor.putString("playIntro", "false")
+                                        //editor.apply()
 
                                     }
 
@@ -626,24 +628,26 @@ class MainActivity : ComponentActivity() {
                             // Content for each page
                             Box(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        when (page) {
-                                            0 -> Color.Red
-                                            1 -> Color.Green
-                                            2 -> Color.Blue
-                                            3 -> Color.Yellow
-                                            else -> Color.Magenta
-                                        }
-                                    ),
+                                    .fillMaxSize(),
                                 contentAlignment = Alignment.Center
                             ) {
+                                Image(
 
-                                Text(
-                                    text = "Page: $page",
-                                    fontSize = 32.sp,
-                                    color = Color.White
+                                    painter = painterResource(id=
+                                        when (page) {
+                                            0 -> R.drawable.__basic
+                                            1 -> R.drawable.__input
+                                            2 -> R.drawable.__pizza
+                                            3 -> R.drawable.__std_range
+                                            4 -> R.drawable.__ext_range
+                                            else -> R.drawable.__basic
+                                        }
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize()
+
                                 )
+
                             }
 
                         }
