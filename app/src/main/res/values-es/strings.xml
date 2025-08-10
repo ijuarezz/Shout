@@ -6,4 +6,9 @@
     <string name="placeholder">Grita algo (o elije un mensaje)</string>
     <string name="range_std">Rango de escucha estándar (10M)</string>
     <string name="range_ext">Rango de escucha extendido (100M)</string>
+    <string name="intro_basic">Da tu opinión a la gente a tu alrededor.</string>
+    <string name="intro_input">La aplicación no requiere registro.</string>
+    <string name="intro_pizza">Y funciona sin internet/datos móviles.</string>
+    <string name="intro_std_range">Recepción estándar de 10 metros.</string>
+    <string name="intro_ext_range">Opcional 100 metros.</string>
 </resources>

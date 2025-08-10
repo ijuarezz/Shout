@@ -13,6 +13,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
+import androidx.compose.animation.core.InfiniteRepeatableSpec
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -60,6 +65,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -360,10 +367,6 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
-            //              lifecycleScope.launch
-
-
-
 
         }
         override fun onEndpointLost(endpointId: String) {
@@ -636,34 +639,38 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
-
                     )
-
                     {
                         val pagerState = rememberPagerState(initialPage = 0, pageCount = { 5 })
                         val coroutineScope = rememberCoroutineScope()
 
                         Scaffold(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 40.dp),
+                            modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 40.dp),
                             topBar = {
-
-                                Text(
-                                    modifier = Modifier
-                                        .padding(all=10.dp)
-                                        .defaultMinSize(minWidth = 16.dp)
-                                        .align(Alignment.Center),
-                                    text = "Welcome to Shout!",
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    maxLines = Int.MAX_VALUE,
-                                    fontSize = 20.sp,
-
+                                Box(
+                                    modifier = Modifier.fillMaxWidth()
+                                ){
+                                    Text(
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .padding(all=10.dp),
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontSize = 16.sp,
+                                        text =
+                                            when (pagerState.currentPage) {
+                                                0 -> getString(R.string.intro_basic)
+                                                1 -> getString(R.string.intro_input)
+                                                2 -> getString(R.string.intro_pizza)
+                                                3 -> getString(R.string.intro_std_range)
+                                                4 -> getString(R.string.intro_ext_range)
+                                                else -> getString(R.string.intro_basic)
+                                        }
                                     )
+                                }
 
-
-                            },
+                                },
                             bottomBar = {},
                             content = { paddingValues ->
-
 
                                 HorizontalPager(
                                     state = pagerState,
@@ -694,7 +701,18 @@ class MainActivity : ComponentActivity() {
                             },
                             floatingActionButton = {
 
+                                val infiniteTransition = rememberInfiniteTransition()
+                                val animatedScale = infiniteTransition.animateFloat(
+                                    initialValue = 0.8f,
+                                    targetValue = 1.0f,
+                                    animationSpec = InfiniteRepeatableSpec(
+                                        animation = tween(durationMillis = 500),
+                                        repeatMode = RepeatMode.Reverse
+                                    )
+                                )
+
                                 FloatingActionButton(
+
                                     onClick = {
 
                                         if(pagerState.currentPage==4){
@@ -719,12 +737,20 @@ class MainActivity : ComponentActivity() {
                                                 pagerState.scrollToPage(pagerState.currentPage+1)
                                             }
                                         }
-                                    }
+                                    },
+                                    Modifier.scale(animatedScale.value)
                                 ) {
 
                                     Icon(
 
-                                        painter = painterResource(id = R.drawable.spatial_tracking_24px),
+                                        painter = painterResource(id =
+                                            if(pagerState.currentPage==4){
+                                                R.drawable.ic_baseline_clear_24
+                                            }
+                                            else{
+                                                R.drawable.east_24px
+                                            }
+                                        ),
                                         contentDescription = "Change",
                                         modifier = Modifier.size(30.dp)
                                     )

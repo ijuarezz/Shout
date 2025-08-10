@@ -6,4 +6,9 @@
     <string name="placeholder">Add new (or select from below)</string>
     <string name="range_std">Standard listening range (10M)</string>
     <string name="range_ext">Extended listening range (100M)</string>
+    <string name="intro_basic">Share your opinions with people near you.</string>
+    <string name="intro_input">No login or registration required.</string>
+    <string name="intro_pizza">No Internet/data access required.</string>
+    <string name="intro_std_range">Standard 10-meter listening range.</string>
+    <string name="intro_ext_range">Optional 100-meter range.</string>
 </resources>

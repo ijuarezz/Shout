@@ -6,4 +6,9 @@
     <string name="placeholder">Grite algo (ou escolha uma msg)</string>
     <string name="range_std">Alcance de audição padrão (10M)</string>
     <string name="range_ext">Alcance de audição estendido (100M)</string>
+    <string name="intro_basic">Dê sua opinião com as pessoas ao seu redor.</string>
+    <string name="intro_input">" O aplicativo não requer cadastro."</string>
+    <string name="intro_pizza">" E funciona sem internet ou dados móveis."</string>
+    <string name="intro_std_range">Recepção padrão de 10 metros.</string>
+    <string name="intro_ext_range">Opcional 100 metros.</string>
 </resources>
