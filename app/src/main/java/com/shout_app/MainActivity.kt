@@ -487,7 +487,6 @@ class MainActivity : ComponentActivity() {
                 }
                 else {
 
-
                     setContent {
                         AppTheme {
                             Box(
@@ -499,15 +498,20 @@ class MainActivity : ComponentActivity() {
 
                                 AlertDialog(
                                     onDismissRequest = { },
-                                    title = { Text("Missing permissions") },
-                                    text = { Text("Please open the application to try again.") },
+                                    title = { Text(getString(R.string.pMissingPermissions)) },
+                                    text = { Text(getString(R.string.pPleaseOpen)) },
                                     confirmButton = {
                                         TextButton(onClick = {
+
+                                            // Reset for next run & exit
+                                            val packageName = applicationContext.packageName
+                                            val runtime = Runtime.getRuntime()
+                                            runtime.exec("pm clear $packageName")
 
                                             finish()
 
                                         }) {
-                                            Text("Exit")
+                                            Text(getString(R.string.pExit))
                                         }
                                     }
                                 )
@@ -541,15 +545,15 @@ class MainActivity : ComponentActivity() {
 
                     AlertDialog(
                         onDismissRequest = { },
-                        title = { Text("Permissions required:") },
-                        text = { Text("- \"Bluetooth/Wi-Fi\" to discover other users around you.\n- \"Location\" to filter messages by distance.") },
+                        title = { Text(getString(R.string.pPermissionsRequired)) },
+                        text = { Text(getString(R.string.pBluetooth)) },
                         confirmButton = {
                             TextButton(onClick = {
 
                                 voteRequestPermission.launch(votePermissions)
 
                             }) {
-                                Text("Continue")
+                                Text(getString(R.string.pContinue))
                             }
                         }
                     )

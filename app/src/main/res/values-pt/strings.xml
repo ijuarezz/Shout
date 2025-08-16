@@ -11,4 +11,10 @@
     <string name="intro_pizza">" E funciona sem internet ou dados móveis."</string>
     <string name="intro_std_range">Recepção padrão de 10 metros.</string>
     <string name="intro_ext_range">Opcional 100 metros.</string>
+    <string name="pMissingPermissions">Permissões negadas</string>
+    <string name="pPleaseOpen">Reabra o aplicativo para tentar novamente.</string>
+    <string name="pExit">Fechar a aplicação</string>
+    <string name="pPermissionsRequired">Permissões necessárias:</string>
+    <string name="pBluetooth">- \"Bluetooth/Wi-Fi\" para descobrir outros usuários ao seu redor.\n- \"Localização\" para filtrar mensagens por distância.</string>
+    <string name="pContinue">Continuar</string>
 </resources>

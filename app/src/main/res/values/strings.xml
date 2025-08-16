@@ -11,4 +11,10 @@
     <string name="intro_pizza">No Internet/data access required.</string>
     <string name="intro_std_range">Standard 10-meter listening range.</string>
     <string name="intro_ext_range">Optional 100-meter range.</string>
+    <string name="pMissingPermissions">Missing permissions</string>
+    <string name="pPleaseOpen">Please open the application to try again.</string>
+    <string name="pExit">Exit</string>
+    <string name="pPermissionsRequired">Permissions required:</string>
+    <string name="pBluetooth">- \"Bluetooth/Wi-Fi\" to discover other users around you.\n- \"Location\" to filter messages by distance.</string>
+    <string name="pContinue">Continue</string>
 </resources>
