@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -22,7 +21,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,6 +40,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardColors
@@ -52,20 +51,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -115,6 +111,8 @@ import java.util.Timer
 import java.util.TimerTask
 import kotlin.Float.Companion.POSITIVE_INFINITY
 
+
+// Log.d("###","")
 
 // *******************  CONSTANTS   *******************
 const val screenFreq: Long = 1 * 1000   //  1 sec
@@ -223,11 +221,9 @@ class MainActivity : ComponentActivity() {
 
             if(it.substring(0,1)=="+") {
                 endpointsList.add(it.substring(1,it.length))
-                // Log.d("###", "======== endpoints  adding $it ")
                             }
             else{
                 endpointsList.remove(it.substring(1,it.length))
-                // Log.d("###", "======== endpoints  removing $it ")
             }
 
 
@@ -328,7 +324,7 @@ class MainActivity : ComponentActivity() {
 
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
 
-            // Log.d("###","==== onConnectionInitiated from $endpointId  info: ${info.isIncomingConnection} ${info.endpointName} ${info.endpointInfo}")
+
             connectionsClient.acceptConnection(endpointId, payloadCallback)
 
 
@@ -336,10 +332,10 @@ class MainActivity : ComponentActivity() {
 
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            // Log.d("###","====    onConnectionResult    $endpointId   result ${result.status} ")
+
         }
         override fun onDisconnected(endpointId: String) {
-            // Log.d("###","Disconnected  $endpointId")
+
         }
 
     }
@@ -347,19 +343,18 @@ class MainActivity : ComponentActivity() {
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
 
-            //  Log.d("###","onEndpointFound  endpointId: $endpointId  info: ${info.serviceId} ${info.endpointName} ${info.endpointInfo}")
+
 
             runBlocking {endPointChannel.send("+$endpointId")}
 
             runBlocking {      // to avoid collisions
                 if(myId.toLong()<info.endpointName.toLong()) runBlocking{
-                    // Log.d("###","onEndpointFound  0.2 sec delay added")
                     delay(200L)
                 }
             }
 
             runBlocking {
-                // Log.d("###","onEndpointFound  requestConnection sent")
+
                 connectionsClient.requestConnection(
                     myId,
                     endpointId,
@@ -370,7 +365,7 @@ class MainActivity : ComponentActivity() {
 
         }
         override fun onEndpointLost(endpointId: String) {
-            // Log.d("###","onEndpointLost  $endpointId")
+
             runBlocking {endPointChannel.send("-$endpointId")}
         }
     }
@@ -381,7 +376,6 @@ class MainActivity : ComponentActivity() {
             val p = String(payload.asBytes()!!, Charsets.UTF_8)
             val aInfo :  List<String> = p.split(sep)
 
-            // Log.d("###","payloadCallback  p $p    aInfo $aInfo ")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) return
@@ -411,14 +405,12 @@ class MainActivity : ComponentActivity() {
             if (newDistance[0] > maxDistance) newVote=emptyVote
 
             // Add new vote
-            // Log.d("###","payloadCallback      ADDING TO CHANNEL p $p    aInfo $aInfo ")
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
 
 
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // Log.d("###","  onPayload  TransferUpdate  endpointId: $endpointId  update: ${update.status}  ${update.payloadId} ${update.bytesTransferred} ${update.totalBytes} ")
 
         }
     }
@@ -444,12 +436,14 @@ class MainActivity : ComponentActivity() {
                 if (location != null) {
                     myLat = location.latitude
                     myLong = location.longitude
-                    // // log("###","== Location: $myLat $myLong")
+
                 }
 
             }
 
     }
+
+
 
     private fun checkPermissions() {
 
@@ -478,37 +472,94 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        var needPermission = "None"
 
-        votePermissions.forEach {
+        val voteRequestPermission =
+            registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
 
-            if (checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED) needPermission = it
-        }
 
-        if (needPermission != "None"){
-            val voteRequestPermission =
-                registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+                // Check result
+                var resultOK = true
+                result.values.forEach { if (!it)  resultOK=false }
 
-                    if (isGranted) {
-                        recreate()
-                    }
-                    else {
-
-                        Toast.makeText(this, getString(R.string.permission_error), Toast.LENGTH_LONG).show()
-
-                        // Reset for next run & exit
-                        val packageName = applicationContext.packageName
-                        val runtime = Runtime.getRuntime()
-                        runtime.exec("pm clear $packageName")
-
-                        finish()
-                    }
+                if (resultOK) {
+                    // *******************  FLOW    *******************
+                    onBoarding()
                 }
+                else {
 
-            voteRequestPermission.launch(needPermission)
 
+                    setContent {
+                        AppTheme {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.background)
+                            )
+                            {
+
+                                AlertDialog(
+                                    onDismissRequest = { },
+                                    title = { Text("Missing permissions") },
+                                    text = { Text("Please open the application to try again.") },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+
+                                            finish()
+
+                                        }) {
+                                            Text("Exit")
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+
+
+                }
+            }
+
+
+        // Check existing permissions
+        var needPermission = "None"
+        votePermissions.forEach { if (checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED) needPermission = it  }
+        if (needPermission == "None") {
+            // *******************  FLOW    *******************
+            onBoarding()
+            return
         }
+
+        setContent {
+            AppTheme {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                )
+                {
+
+                    AlertDialog(
+                        onDismissRequest = { },
+                        title = { Text("Permissions required:") },
+                        text = { Text("- \"Bluetooth/Wi-Fi\" to discover other users around you.\n- \"Location\" to filter messages by distance.") },
+                        confirmButton = {
+                            TextButton(onClick = {
+
+                                voteRequestPermission.launch(votePermissions)
+
+                            }) {
+                                Text("Continue")
+                            }
+                        }
+                    )
+                }
+            }
+        }
+
+
     }
+
 
     private fun getMyPreferences() {
 
@@ -572,7 +623,7 @@ class MainActivity : ComponentActivity() {
 
                 override fun run() {
 
-                    // Log.d("###"," TimerTask")
+
 
                     runOnUiThread {
                         runBlocking { voteChannel.send(IdVote(myId, myVote)) }
@@ -653,7 +704,7 @@ class MainActivity : ComponentActivity() {
                                     Text(
                                         modifier = Modifier
                                             .align(Alignment.Center)
-                                            .padding(all=10.dp),
+                                            .padding(all = 10.dp),
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         fontSize = 16.sp,
                                         text =
@@ -722,9 +773,8 @@ class MainActivity : ComponentActivity() {
                                             val editor = sharedPreference.edit()
 
                                             if (sharedPreference.contains("playIntro")) {
-                                                // todo remove these comments
-                                                //editor.putString("playIntro", "false")
-                                                //editor.apply()
+                                                editor.putString("playIntro", "false")
+                                                editor.apply()
 
                                                 // *******************  FLOW    *******************
                                                 startNearby()
@@ -851,10 +901,14 @@ class MainActivity : ComponentActivity() {
 
                                         Text(
                                             modifier = Modifier
-                                                .absolutePadding(top = 9.dp, bottom = 9.dp, left=10.dp)
+                                                .absolutePadding(
+                                                    top = 9.dp,
+                                                    bottom = 9.dp,
+                                                    left = 10.dp
+                                                )
                                                 .defaultMinSize(minWidth = 16.dp)
                                                 .align(Alignment.CenterVertically)
-                                                .clickable { focusRequester.requestFocus()},
+                                                .clickable { focusRequester.requestFocus() },
                                             text = "+",
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                                             maxLines = Int.MAX_VALUE,
@@ -988,10 +1042,17 @@ class MainActivity : ComponentActivity() {
                                             .padding(horizontal = 16.dp, vertical = 4.dp)
                                             .fillMaxWidth()
                                             .clickable {
-                                                    if (!sameVote) {
-                                                        myVote = thisVote
-                                                        runBlocking {voteChannel.send(IdVote(myId,myVote))}
+                                                if (!sameVote) {
+                                                    myVote = thisVote
+                                                    runBlocking {
+                                                        voteChannel.send(
+                                                            IdVote(
+                                                                myId,
+                                                                myVote
+                                                            )
+                                                        )
                                                     }
+                                                }
 
                                             }
 
@@ -1011,7 +1072,11 @@ class MainActivity : ComponentActivity() {
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                 maxLines = Int.MAX_VALUE,
                                                 modifier = Modifier
-                                                    .absolutePadding(top = 9.dp, bottom = 9.dp, left=10.dp)
+                                                    .absolutePadding(
+                                                        top = 9.dp,
+                                                        bottom = 9.dp,
+                                                        left = 10.dp
+                                                    )
                                                     .defaultMinSize(minWidth = 16.dp),
 
                                                 )
@@ -1053,7 +1118,14 @@ class MainActivity : ComponentActivity() {
                                                         .padding(all = 9.dp)
                                                         .clickable {
                                                             myVote = emptyVote
-                                                            runBlocking {voteChannel.send(IdVote(myId,myVote))}
+                                                            runBlocking {
+                                                                voteChannel.send(
+                                                                    IdVote(
+                                                                        myId,
+                                                                        myVote
+                                                                    )
+                                                                )
+                                                            }
                                                         }
 
                                                 )
@@ -1119,7 +1191,6 @@ class MainActivity : ComponentActivity() {
 
         getMyPreferences()
         checkPermissions()
-        onBoarding()
 
     }
 
@@ -1127,7 +1198,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        // Log.d("###"," onResume")
+
 
         timerScreenOn = true
         timerLocOn = true
@@ -1137,7 +1208,7 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onPause() {
 
-        // Log.d("###"," onPause")
+
 
         timerScreenOn = false
         timerLocOn = false
@@ -1149,14 +1220,12 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onStop() {
 
-        // Log.d("###"," onStop")
         super.onStop()
     }
 
     @CallSuper
     override fun onDestroy() {
 
-        // Log.d("###"," onDestroy")
 
         timerProcess.cancel()
         timerLoc.cancel()
