@@ -103,9 +103,7 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.OnTokenCanceledListener
 import com.shout_app.ui.theme.AppTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.Timer
@@ -116,14 +114,14 @@ import kotlin.Float.Companion.POSITIVE_INFINITY
 
 
 // *******************  CONSTANTS   *******************
-// const val screenFreq: Long = 1 * 1000   //  1 sec
-// todo
-const val screenFreq: Long = 5 * 1000   //  5 sec
+const val screenFreq: Long = 1 * 1000   //  1 sec
+// const val screenFreq: Long = 5 * 1000   //  5 sec
+
+const val tooOldMins: Long = 2 * 60   //  120 sec = 2 mins
+// const val tooOldMins: Long = 10   //  10 SECS
+
+const val sendCounterMax: Int = ((tooOldMins*1000/screenFreq)/4).toInt()   //  send empty vote every quarter of tooOldDuration = 30 secs
 const val locFreq: Long = 60 * 1000   //  1 min
-
-const val tooOldDuration: Long = 2 * 60   //  2 mins
-// const val tooOldDuration: Long = 10   //  10 SECS
-
 const val maxVoteLength: Int = 40   // 40 chars
 
 const val sep = "╚"
@@ -141,8 +139,11 @@ class MainActivity : ComponentActivity() {
     var maxDistance = 10f  //   10 meters
     var myLat: Double = 0.0
     var myLong: Double = 0.0
+    var sendCounter:Int=0
+
     private var myId: String = ""
     private var myVote=emptyVote
+    private var myVoteChanged=false
     private var playIntro: Boolean = true
 
     private var votesCount:Int=0
@@ -183,7 +184,7 @@ class MainActivity : ComponentActivity() {
 
         var lastVote:String
         var lastVoteCount: Int
-        val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldDuration
+        val tooOld: Long = (System.currentTimeMillis()/1000) - tooOldMins
 
         //delete old entries by time first
         val iterator = idToTime.iterator()
@@ -236,60 +237,62 @@ class MainActivity : ComponentActivity() {
 
         // process votes
         val voteChannelTime = System.currentTimeMillis() /1000
-
         while(!voteChannel.isEmpty){
 
             val it = voteChannel.receive()
-
             val thisVote = it.vote
-
-
             idToTime[it.id] = voteChannelTime
 
+            if(idToVote.containsKey(it.id)) {
 
-            if(idToVote.containsKey(it.id)) { // voter exists
-
-
+                // voter exists
                 lastVote = idToVote[it.id].toString()
 
-                if (thisVote != lastVote) { // vote changed
+                if (thisVote != lastVote) {
 
-
+                    // vote changed
                     if(thisVote== emptyVote) {
+                        // vote is now empty
                         noVotesCount++
                         votesCount--
                     }
                     else{
+                        // new vote
                         votesSummary[thisVote] = (votesSummary[thisVote]?:0) + 1
                     }
 
+
                     if(lastVote== emptyVote) {
+                        // decrease empty counter
                         noVotesCount--
                         votesCount++
                     }
 
+                    // decrease counter for lastVote
+                    lastVoteCount = (votesSummary[lastVote]?:0)-1
 
-                    lastVoteCount = (votesSummary[lastVote]?:0)-1   // decrease counter for lastVote
-
-                    if(lastVoteCount>0) {   // update counter
+                    if(lastVoteCount>0) {
+                        // update counter of lat vote
                         votesSummary[lastVote] = lastVoteCount
                     }
-                    else{  // or delete vote
-
+                    else{
+                        // or delete vote
                         idToVote.remove(lastVote)
                         idToTime.remove(lastVote)
                         votesSummary.remove(lastVote)
-
                     }
                 }
             }
 
-            else{  // new voter
+            else{
 
+                // new voter
                 if(thisVote== emptyVote) {
+                    // increase counter for empty
                     noVotesCount++
                 }
                 else{
+                    // increase counter for new vote
                     votesCount++
                     votesSummary[thisVote] = (votesSummary[thisVote]?:0) + 1
                 }
@@ -312,8 +315,23 @@ class MainActivity : ComponentActivity() {
         // Update UI
         myUI()
 
-        // Send out vote
-        if (endpointsList.isEmpty()) return
+        // check if it's OK to broadcast vote
+
+        if (endpointsList.isEmpty()){
+            Log.d("###", "endpointsList.isEmpty")
+            return
+        }
+
+        sendCounter++
+        if (sendCounter>sendCounterMax) sendCounter=0
+        if (myVoteChanged) {
+            sendCounter = 0
+            myVoteChanged=false
+        }
+
+        if (sendCounter>0) return
+
+        // Broadcast vote
         val p = "$myId$sep$myLat$sep$myLong$sep$myVote"
         Log.d("###", "   sending $p  >>>>> ")
         connectionsClient.sendPayload(endpointsList,Payload.fromBytes(p.toByteArray()))
@@ -328,13 +346,12 @@ class MainActivity : ComponentActivity() {
 
             Log.d("###","==== onConnectionInitiated from $endpointId  info: ${info.isIncomingConnection} ${info.endpointName} ${info.endpointInfo}")
             connectionsClient.acceptConnection(endpointId, payloadCallback)
-
-
         }
 
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
             Log.d("###","====    onConnectionResult    $endpointId   result ${result.status} ")
+            sendCounter=sendCounterMax-3   // to trigger a Broadcast but also avoiding a Mutex
         }
         override fun onDisconnected(endpointId: String) {
             Log.d("###","Disconnected  $endpointId")
@@ -347,23 +364,35 @@ class MainActivity : ComponentActivity() {
 
             Log.d("###","onEndpointFound  endpointId: $endpointId  info: ${info.serviceId} ${info.endpointName} ${info.endpointInfo}")
 
-            runBlocking {endPointChannel.send("+$endpointId")}
-
-            runBlocking {      // to avoid collisions
-                if(myId.toLong()<info.endpointName.toLong()) runBlocking{
-                    // todo do not use delay
-                    Log.d("###","onEndpointFound  0.2 sec delay added")
-                    delay(200L)
-                }
-            }
 
             runBlocking {
-                Log.d("###","onEndpointFound  requestConnection sent")
-                connectionsClient.requestConnection(
-                    myId,
-                    endpointId,
-                    connectionLifecycleCallback
-                )
+
+                endPointChannel.send("+$endpointId")
+
+                // to avoid collisions
+                val d = if(myId.toLong()<info.endpointName.toLong()) 2000L else 0L
+
+                launch{
+
+                    if (d==0L) {
+                        Log.d("###", "onEndpointFound         requestConnection sent")
+                        connectionsClient.requestConnection(
+                            myId,
+                            endpointId,
+                            connectionLifecycleCallback
+                        )
+                    }
+
+
+                    /*
+                    if (d!=0L) {
+                        Log.d("###","onEndpointFound  delaying request")
+                        delay(d)
+                    }
+                    Log.d("###","onEndpointFound         requestConnection sent")
+                    connectionsClient.requestConnection( myId, endpointId, connectionLifecycleCallback)
+                     */
+                }
             }
 
 
@@ -607,14 +636,13 @@ class MainActivity : ComponentActivity() {
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
 
         runBlocking {
-            async{
+            // async{
                 connectionsClient.startAdvertising(
                     myId,
                     packageName,
                     connectionLifecycleCallback,
                     advertisingOptions
                 )
-            }
         }
 
         // *******************  FLOW    *******************
@@ -629,9 +657,6 @@ class MainActivity : ComponentActivity() {
             object : TimerTask() {
 
                 override fun run() {
-
-
-
                     runOnUiThread {
                         runBlocking { voteChannel.send(IdVote(myId, myVote)) }
                         runBlocking { process() }
@@ -867,12 +892,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
-
                 ){
                     Scaffold(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 40.dp),
                         topBar = {
-
 
                             tallyColor = if(myVote == emptyVote){
                                 MaterialTheme.colorScheme.primaryContainer
@@ -880,104 +903,75 @@ class MainActivity : ComponentActivity() {
                                 MaterialTheme.colorScheme.surfaceVariant
                             }
 
+                            Card(
+                                colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min)
+                                    .wrapContentHeight()
+                            ) {
 
-
-                                Card(
-
-                                    colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
-
+                                Row(
                                     modifier = Modifier
-                                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                                        .fillMaxWidth()
-                                        .height(IntrinsicSize.Min)
-                                        .wrapContentHeight()
+                                        .padding(horizontal = 4.dp)
+                                        .background(color = tallyColor),
                                 ) {
-
-                                    Row(
-
+                                    Text(
                                         modifier = Modifier
-                                            .padding(horizontal = 4.dp)
-                                            .background(color = tallyColor),
-                                    ) {
+                                            .absolutePadding(top = 9.dp,bottom = 9.dp,left = 10.dp)
+                                            .defaultMinSize(minWidth = 16.dp)
+                                            .align(Alignment.CenterVertically)
+                                            .clickable { focusRequester.requestFocus() },
+                                        text = "+",
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        maxLines = Int.MAX_VALUE,
+                                        fontSize = 20.sp,
+                                        )
 
-                                        Text(
-                                            modifier = Modifier
-                                                .absolutePadding(
-                                                    top = 9.dp,
-                                                    bottom = 9.dp,
-                                                    left = 10.dp
-                                                )
-                                                .defaultMinSize(minWidth = 16.dp)
-                                                .align(Alignment.CenterVertically)
-                                                .clickable { focusRequester.requestFocus() },
-                                            text = "+",
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            maxLines = Int.MAX_VALUE,
-                                            fontSize = 20.sp,
-
-
-                                            )
-
-
-                                        TextField(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .focusRequester(focusRequester)
-                                                .onKeyEvent {
-                                                    if (it.key == Key.Back) {
-                                                        keyboardController?.hide()
-                                                        focusManager.clearFocus()
-                                                        true
-                                                    } else {
-                                                        false
-                                                    }
-                                                },
-
-                                            value = textTyped,
-                                            placeholder = { Text(getString(R.string.placeholder)) },
-                                            singleLine = true,
-
-                                            colors=TextFieldDefaults.colors(
-                                                focusedContainerColor = tallyColor,
-                                                unfocusedContainerColor = tallyColor,
-
-                                                focusedIndicatorColor = Color.Transparent,
-                                                unfocusedIndicatorColor = Color.Transparent,
-                                                disabledIndicatorColor = Color.Transparent
-                                            ),
-
-
-                                            onValueChange = {
-                                                if (it.length <= maxVoteLength) textTyped = it
-                                                else Toast.makeText(myContext, getString(R.string.max_chars_error)+" $maxVoteLength",Toast.LENGTH_SHORT).show()
-                                            },
-
-                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences),
-                                            keyboardActions = KeyboardActions(
-                                                onDone = {
+                                    TextField(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(focusRequester)
+                                            .onKeyEvent {
+                                                if (it.key == Key.Back) {
                                                     keyboardController?.hide()
                                                     focusManager.clearFocus()
-                                                    myVote = textTyped.trim()
-                                                    textTyped=""
-                                                    runBlocking {voteChannel.send(IdVote(myId,myVote))}
+                                                    true
+                                                } else false
+                                            },
 
-                                                }
-                                            ),
+                                        value = textTyped,
+                                        placeholder = { Text(getString(R.string.placeholder)) },
+                                        singleLine = true,
+                                        colors=TextFieldDefaults.colors(
+                                            focusedContainerColor = tallyColor,
+                                            unfocusedContainerColor = tallyColor,
+                                            focusedIndicatorColor = Color.Transparent,
+                                            unfocusedIndicatorColor = Color.Transparent,
+                                            disabledIndicatorColor = Color.Transparent
+                                        ),
 
+                                        onValueChange = {
+                                            if (it.length <= maxVoteLength) textTyped = it
+                                            else Toast.makeText(myContext, getString(R.string.max_chars_error)+" $maxVoteLength",Toast.LENGTH_SHORT).show()
+                                        },
 
-
-                                            )
-                                    }
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences),
+                                        keyboardActions = KeyboardActions(
+                                            onDone = {
+                                                keyboardController?.hide()
+                                                focusManager.clearFocus()
+                                                myVoteChanged=true
+                                                myVote = textTyped.trim()
+                                                textTyped=""
+                                                runBlocking {voteChannel.send(IdVote(myId,myVote))}
+                                            }
+                                        ),
+                                    )
                                 }
-
-
-
-
-
+                            }
                         },
-
-
-
 
                         bottomBar = {
 
@@ -1035,28 +1029,18 @@ class MainActivity : ComponentActivity() {
                                         MaterialTheme.colorScheme.surfaceVariant
                                     }
 
-
-
                                     Card(
                                         colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
                                         modifier = Modifier
-                                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                if (!sameVote) {
-                                                    myVote = thisVote
-                                                    runBlocking {
-                                                        voteChannel.send(
-                                                            IdVote(
-                                                                myId,
-                                                                myVote
-                                                            )
-                                                        )
-                                                    }
-                                                }
-
+                                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (!sameVote) {
+                                                myVoteChanged=true
+                                                myVote = thisVote
+                                                runBlocking {voteChannel.send(IdVote(myId,myVote))}
                                             }
-
+                                        }
                                     ) {
 
                                         Row(
@@ -1068,26 +1052,15 @@ class MainActivity : ComponentActivity() {
                                         ) {
 
                                             Text(
-
                                                 text = eachTally.second.toString(),
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                 maxLines = Int.MAX_VALUE,
                                                 modifier = Modifier
-                                                    .absolutePadding(
-                                                        top = 9.dp,
-                                                        bottom = 9.dp,
-                                                        left = 10.dp
-                                                    )
+                                                    .absolutePadding(top = 9.dp,bottom = 9.dp,left = 10.dp)
                                                     .defaultMinSize(minWidth = 16.dp),
-
                                                 )
 
-                                            Spacer(
-                                                modifier = Modifier
-                                                    .fillMaxHeight()
-                                                    .width(14.dp)
-                                            )
-
+                                            Spacer( modifier = Modifier.fillMaxHeight().width(14.dp))
 
                                             Text(
                                                 text = thisVote,
@@ -1096,51 +1069,28 @@ class MainActivity : ComponentActivity() {
                                                     .padding(vertical = 9.dp)
                                                     .weight(1f),
                                                 maxLines = Int.MAX_VALUE,
-
                                             )
 
                                             if (sameVote){
-
-                                                Spacer(
-                                                    modifier = Modifier
-                                                        .fillMaxHeight()
-                                                        .width(4.dp)
-                                                )
-
-
+                                                Spacer(modifier = Modifier.fillMaxHeight().width(4.dp))
 
                                                 Text(
-
                                                     text = "\u2715",
                                                     fontWeight = FontWeight.Bold,
                                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                     maxLines = Int.MAX_VALUE,
                                                     modifier = Modifier
-                                                        .padding(all = 9.dp)
-                                                        .clickable {
-                                                            myVote = emptyVote
-                                                            runBlocking {
-                                                                voteChannel.send(
-                                                                    IdVote(
-                                                                        myId,
-                                                                        myVote
-                                                                    )
-                                                                )
-                                                            }
-                                                        }
-
+                                                    .padding(all = 9.dp)
+                                                    .clickable {
+                                                        myVoteChanged=true
+                                                        myVote = emptyVote
+                                                        runBlocking {voteChannel.send(IdVote(myId,myVote))}
+                                                    }
                                                 )
                                             }
-
-
-
-
                                         }
                                     }
-
-
                                 }
-
                             }
 
                         },
@@ -1148,7 +1098,6 @@ class MainActivity : ComponentActivity() {
 
                             FloatingActionButton(
                                 onClick = {
-
                                     extendedMode = !extendedMode
 
                                     if(extendedMode){
@@ -1159,28 +1108,20 @@ class MainActivity : ComponentActivity() {
                                         maxDistance=10f
                                         Toast.makeText(this@MainActivity, getString(R.string.range_std), Toast.LENGTH_LONG).show()
                                     }
-
-
                                 }
                             ) {
-
                                 Icon(
-
                                     painter = if (extendedMode) painterResource(id = R.drawable.spatial_tracking_24px) else painterResource(id = R.drawable.spatial_audio_off_24px) ,
                                     contentDescription = "Change",
                                     modifier = Modifier.size(30.dp)
                                 )
                             }
-
                         },
                         floatingActionButtonPosition = FabPosition.End
                     )
                 }
-
             }
-
         }
-
     }
 
     // *******************  LIFECYCLE   *******************
