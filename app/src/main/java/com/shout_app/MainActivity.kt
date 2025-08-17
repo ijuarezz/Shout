@@ -153,8 +153,6 @@ class MainActivity : ComponentActivity() {
     private val strategy = Strategy.P2P_CLUSTER
     private lateinit var connectionsClient: ConnectionsClient
 
-    // todo
-    // mutex for Loc ?
 
     // *******************  CHANNELS   *******************
     val voteChannel = Channel<IdVote>(Channel.UNLIMITED)
@@ -322,7 +320,6 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        Log.d("###", "~~~~~~~~ process   myVoteChanged  $myVoteChanged")
         sendCounter++
         if (sendCounter>sendCounterMax) sendCounter=0
         if (myVoteChanged) {
@@ -700,9 +697,7 @@ class MainActivity : ComponentActivity() {
         if(playIntro){
 
             setContent {
-
                 AppTheme {
-
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -713,7 +708,7 @@ class MainActivity : ComponentActivity() {
                         val coroutineScope = rememberCoroutineScope()
 
                         Scaffold(
-                            modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 40.dp),
+                            modifier = Modifier.padding(start = 0.dp, end = 0.dp, top = 40.dp, bottom = 40.dp),
                             topBar = {
                                 Box(
                                     modifier = Modifier.fillMaxWidth()
@@ -765,7 +760,6 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.fillMaxSize()
                                         )
                                 }
-
                             },
                             floatingActionButton = {
 
@@ -827,9 +821,7 @@ class MainActivity : ComponentActivity() {
                             floatingActionButtonPosition = FabPosition.Center
                         )
                     }
-
                 }
-
             }
         }
         else {
