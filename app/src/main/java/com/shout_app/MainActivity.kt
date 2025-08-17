@@ -117,8 +117,8 @@ import kotlin.Float.Companion.POSITIVE_INFINITY
 const val screenFreq: Long = 1 * 1000   //  1 sec
 // const val screenFreq: Long = 5 * 1000   //  5 sec
 
-const val tooOldMins: Long = 2 * 60   //  120 sec = 2 mins
-// const val tooOldMins: Long = 10   //  10 SECS
+const val tooOldMins: Long = 3 * 60   //  120 sec = 3 mins
+//const val tooOldMins: Long = 1 * 60   //  60 sec = 1 min
 
 const val sendCounterMax: Int = ((tooOldMins*1000/screenFreq)/4).toInt()   //  send empty vote every quarter of tooOldDuration = 30 secs
 const val locFreq: Long = 60 * 1000   //  1 min
@@ -140,12 +140,12 @@ class MainActivity : ComponentActivity() {
     var myLat: Double = 0.0
     var myLong: Double = 0.0
     var sendCounter:Int=0
+    var myVoteChanged=true
 
     private var myId: String = ""
     private var myVote=emptyVote
-    private var myVoteChanged=false
-    private var playIntro: Boolean = true
 
+    private var playIntro: Boolean = true
     private var votesCount:Int=0
     private var noVotesCount:Int=0
 
@@ -322,6 +322,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        Log.d("###", "~~~~~~~~ process   myVoteChanged  $myVoteChanged")
         sendCounter++
         if (sendCounter>sendCounterMax) sendCounter=0
         if (myVoteChanged) {
@@ -351,7 +352,12 @@ class MainActivity : ComponentActivity() {
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
             Log.d("###","====    onConnectionResult    $endpointId   result ${result.status} ")
-            sendCounter=sendCounterMax-3   // to trigger a Broadcast but also avoiding a Mutex
+
+            if(result.status.isSuccess){
+                runBlocking {endPointChannel.send("+$endpointId")}
+                sendCounter=sendCounterMax-3   // to trigger a Broadcast but also avoiding a Mutex
+            }
+
         }
         override fun onDisconnected(endpointId: String) {
             Log.d("###","Disconnected  $endpointId")
@@ -364,38 +370,23 @@ class MainActivity : ComponentActivity() {
 
             Log.d("###","onEndpointFound  endpointId: $endpointId  info: ${info.serviceId} ${info.endpointName} ${info.endpointInfo}")
 
+            // to avoid collisions
+            if (myId.toLong()<info.endpointName.toLong()) {
+                Log.d("###", "onEndpointFound         requestConnection sent")
 
-            runBlocking {
-
-                endPointChannel.send("+$endpointId")
-
-                // to avoid collisions
-                val d = if(myId.toLong()<info.endpointName.toLong()) 2000L else 0L
-
-                launch{
-
-                    if (d==0L) {
-                        Log.d("###", "onEndpointFound         requestConnection sent")
-                        connectionsClient.requestConnection(
-                            myId,
-                            endpointId,
-                            connectionLifecycleCallback
-                        )
+                runBlocking {
+                    launch{
+                        if (myId.toLong()<info.endpointName.toLong()) {
+                            Log.d("###", "onEndpointFound         requestConnection sent")
+                            connectionsClient.requestConnection(
+                                myId,
+                                endpointId,
+                                connectionLifecycleCallback
+                            )
+                        }
                     }
-
-
-                    /*
-                    if (d!=0L) {
-                        Log.d("###","onEndpointFound  delaying request")
-                        delay(d)
-                    }
-                    Log.d("###","onEndpointFound         requestConnection sent")
-                    connectionsClient.requestConnection( myId, endpointId, connectionLifecycleCallback)
-                     */
                 }
             }
-
-
         }
         override fun onEndpointLost(endpointId: String) {
             Log.d("###","onEndpointLost  $endpointId")
@@ -436,8 +427,8 @@ class MainActivity : ComponentActivity() {
             val newDistance: FloatArray = floatArrayOf(0f)
             Location.distanceBetween(newLatD,newLongD, myLat,myLong,newDistance)
 
-            // todo   delete comment below
-            // if (newDistance[0] > maxDistance) newVote=emptyVote
+
+            if (newDistance[0] > maxDistance) newVote=emptyVote
 
             // Add new vote
             // Log.d("###","payloadCallback      adding to channel  $aInfo ")
@@ -691,8 +682,6 @@ class MainActivity : ComponentActivity() {
         savedInstanceState.putString("myId", myId)
         savedInstanceState.putString("myVote", myVote)
         savedInstanceState.putFloat("maxDistance", maxDistance)
-
-
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
@@ -701,7 +690,7 @@ class MainActivity : ComponentActivity() {
         myId = savedInstanceState.getString("myId").toString()
         myVote = savedInstanceState.getString("myVote").toString()
         maxDistance = savedInstanceState.getFloat("maxDistance")
-
+        myVoteChanged=true
     }
 
 
@@ -1138,19 +1127,14 @@ class MainActivity : ComponentActivity() {
     @CallSuper
     override fun onResume() {
         super.onResume()
-
-
-
+        myVoteChanged=true
         timerScreenOn = true
         timerLocOn = true
-
     }
 
     @CallSuper
     override fun onPause() {
-
-
-
+        myVoteChanged=true
         timerScreenOn = false
         timerLocOn = false
 
@@ -1160,13 +1144,11 @@ class MainActivity : ComponentActivity() {
 
     @CallSuper
     override fun onStop() {
-
         super.onStop()
     }
 
     @CallSuper
     override fun onDestroy() {
-
 
         timerProcess.cancel()
         timerLoc.cancel()
