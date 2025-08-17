@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -112,11 +113,12 @@ import java.util.TimerTask
 import kotlin.Float.Companion.POSITIVE_INFINITY
 
 
-// Log.d("###","")
+
 
 // *******************  CONSTANTS   *******************
-const val screenFreq: Long = 1 * 1000   //  1 sec
-// const val screenFreq: Long = 5 * 1000   //  5 sec
+// const val screenFreq: Long = 1 * 1000   //  1 sec
+// todo
+const val screenFreq: Long = 5 * 1000   //  5 sec
 const val locFreq: Long = 60 * 1000   //  1 min
 
 const val tooOldDuration: Long = 2 * 60   //  2 mins
@@ -174,7 +176,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var votesSorted: List<Pair<String, Int>>
 
 
-    // *******************  FUNCTIONS   *******************
+    // *******************  MAIN   *******************
 
     @OptIn(ExperimentalCoroutinesApi::class)
     suspend fun process(){
@@ -221,9 +223,11 @@ class MainActivity : ComponentActivity() {
 
             if(it.substring(0,1)=="+") {
                 endpointsList.add(it.substring(1,it.length))
+                Log.d("###", "======== endpoints  adding $it ")
                             }
             else{
                 endpointsList.remove(it.substring(1,it.length))
+                Log.d("###", "======== endpoints  removing $it ")
             }
 
 
@@ -299,22 +303,20 @@ class MainActivity : ComponentActivity() {
         // sort by votes
         votesSorted = votesSummary.toList().sortedBy { (_, v) -> v }.reversed().toList()
 
-
-
         if (!timerScreenOn) return
 
         // check counters before calling UI
         if ( (noVotesCount<1) && (myVote == emptyVote) )  noVotesCount=1
-
         if ( (votesCount<1) && (myVote != emptyVote) )  votesCount=1
 
+        // Update UI
         myUI()
 
+        // Send out vote
         if (endpointsList.isEmpty()) return
-
         val p = "$myId$sep$myLat$sep$myLong$sep$myVote"
+        Log.d("###", "   sending $p  >>>>> ")
         connectionsClient.sendPayload(endpointsList,Payload.fromBytes(p.toByteArray()))
-
 
     }
 
@@ -324,7 +326,7 @@ class MainActivity : ComponentActivity() {
 
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
 
-
+            Log.d("###","==== onConnectionInitiated from $endpointId  info: ${info.isIncomingConnection} ${info.endpointName} ${info.endpointInfo}")
             connectionsClient.acceptConnection(endpointId, payloadCallback)
 
 
@@ -332,10 +334,10 @@ class MainActivity : ComponentActivity() {
 
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-
+            Log.d("###","====    onConnectionResult    $endpointId   result ${result.status} ")
         }
         override fun onDisconnected(endpointId: String) {
-
+            Log.d("###","Disconnected  $endpointId")
         }
 
     }
@@ -343,18 +345,20 @@ class MainActivity : ComponentActivity() {
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
 
-
+            Log.d("###","onEndpointFound  endpointId: $endpointId  info: ${info.serviceId} ${info.endpointName} ${info.endpointInfo}")
 
             runBlocking {endPointChannel.send("+$endpointId")}
 
             runBlocking {      // to avoid collisions
                 if(myId.toLong()<info.endpointName.toLong()) runBlocking{
+                    // todo do not use delay
+                    Log.d("###","onEndpointFound  0.2 sec delay added")
                     delay(200L)
                 }
             }
 
             runBlocking {
-
+                Log.d("###","onEndpointFound  requestConnection sent")
                 connectionsClient.requestConnection(
                     myId,
                     endpointId,
@@ -365,7 +369,7 @@ class MainActivity : ComponentActivity() {
 
         }
         override fun onEndpointLost(endpointId: String) {
-
+            Log.d("###","onEndpointLost  $endpointId")
             runBlocking {endPointChannel.send("-$endpointId")}
         }
     }
@@ -376,6 +380,7 @@ class MainActivity : ComponentActivity() {
             val p = String(payload.asBytes()!!, Charsets.UTF_8)
             val aInfo :  List<String> = p.split(sep)
 
+            Log.d("###","            >>>>> received  $aInfo ")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) return
@@ -402,20 +407,21 @@ class MainActivity : ComponentActivity() {
             val newDistance: FloatArray = floatArrayOf(0f)
             Location.distanceBetween(newLatD,newLongD, myLat,myLong,newDistance)
 
-            if (newDistance[0] > maxDistance) newVote=emptyVote
+            // todo   delete comment below
+            // if (newDistance[0] > maxDistance) newVote=emptyVote
 
             // Add new vote
+            // Log.d("###","payloadCallback      adding to channel  $aInfo ")
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
 
 
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
+            // Log.d("###","  onPayload  TransferUpdate  endpointId: $endpointId  update: ${update.status}  ${update.payloadId} ${update.bytesTransferred} ${update.totalBytes} ")
 
         }
     }
-
-
 
 
 
@@ -442,8 +448,6 @@ class MainActivity : ComponentActivity() {
             }
 
     }
-
-
 
     private fun checkPermissions() {
 
@@ -564,7 +568,6 @@ class MainActivity : ComponentActivity() {
 
     }
 
-
     private fun getMyPreferences() {
 
         val sharedPreference = getSharedPreferences("MyPreferences", MODE_PRIVATE)
@@ -657,10 +660,7 @@ class MainActivity : ComponentActivity() {
     }
 
 
-
-
-
-
+    // *******************  SAVE/RESTORE INSTANCE   *******************
     public override fun onSaveInstanceState(savedInstanceState: Bundle) {
         super.onSaveInstanceState(savedInstanceState)
         savedInstanceState.putString("myId", myId)
@@ -679,9 +679,8 @@ class MainActivity : ComponentActivity() {
 
     }
 
+
     // *******************  UI   *******************
-
-
     private fun onBoarding()  {
 
         if(playIntro){
@@ -824,8 +823,6 @@ class MainActivity : ComponentActivity() {
             startNearby()
         }
     }
-
-
 
     private fun myUI() {
 
@@ -1185,7 +1182,6 @@ class MainActivity : ComponentActivity() {
         }
 
     }
-
 
     // *******************  LIFECYCLE   *******************
 
