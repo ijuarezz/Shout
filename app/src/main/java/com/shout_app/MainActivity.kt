@@ -117,10 +117,11 @@ import kotlin.Float.Companion.POSITIVE_INFINITY
 const val screenFreq: Long = 1 * 1000   //  1 sec
 // const val screenFreq: Long = 5 * 1000   //  5 sec
 
-const val tooOldMins: Long = 3 * 60   //  120 sec = 3 mins
+const val tooOldMins: Long = 3 * 60   //  180 sec = 3 mins
 //const val tooOldMins: Long = 1 * 60   //  60 sec = 1 min
 
-const val sendCounterMax: Int = ((tooOldMins*1000/screenFreq)/4).toInt()   //  send empty vote every quarter of tooOldDuration = 30 secs
+const val sendCounterMax: Int = ((tooOldMins*1000/screenFreq)/4).toInt()   //  send empty vote every quarter of tooOldDuration = 45 secs
+
 const val locFreq: Long = 60 * 1000   //  1 min
 const val maxVoteLength: Int = 40   // 40 chars
 
@@ -170,7 +171,7 @@ class MainActivity : ComponentActivity() {
     private var idToVote = mutableMapOf<String, String>()
     private var idToTime = mutableMapOf<String, Long>()
     private val votesSummary: MutableMap<String, Int> = HashMap()
-    private val endpointsList = mutableListOf<String>()
+    private val endpointsList = mutableSetOf<String>()
 
     private lateinit var votesSorted: List<Pair<String, Int>>
 
@@ -316,7 +317,7 @@ class MainActivity : ComponentActivity() {
         // check if it's OK to broadcast vote
 
         if (endpointsList.isEmpty()){
-            Log.d("###", "endpointsList.isEmpty")
+            // Log.d("###", "endpointsList.isEmpty")
             return
         }
 
@@ -331,8 +332,8 @@ class MainActivity : ComponentActivity() {
 
         // Broadcast vote
         val p = "$myId$sep$myLat$sep$myLong$sep$myVote"
-        Log.d("###", "   sending $p  >>>>> ")
-        connectionsClient.sendPayload(endpointsList,Payload.fromBytes(p.toByteArray()))
+        Log.d("###", "   sending $p  to endpointsList $endpointsList ")
+        connectionsClient.sendPayload(endpointsList.toList(),Payload.fromBytes(p.toByteArray()))
 
     }
 
@@ -348,16 +349,21 @@ class MainActivity : ComponentActivity() {
 
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            Log.d("###","====    onConnectionResult    $endpointId   result ${result.status} ")
 
+            Log.d("###","====    onConnectionResult    $endpointId   result ${result.status} ")
             if(result.status.isSuccess){
                 runBlocking {endPointChannel.send("+$endpointId")}
-                sendCounter=sendCounterMax-3   // to trigger a Broadcast but also avoiding a Mutex
+                sendCounter=sendCounterMax-3   // to delay trigger a Broadcast
+            }
+            else{
+                Log.d("###","====    onConnectionResult  ### ERROR ###  $endpointId   result $result} ")
+                Toast.makeText(this@MainActivity, getString(R.string.restart_app), Toast.LENGTH_LONG).show()
             }
 
         }
         override fun onDisconnected(endpointId: String) {
             Log.d("###","Disconnected  $endpointId")
+            runBlocking {endPointChannel.send("-$endpointId")}
         }
 
     }
@@ -370,19 +376,7 @@ class MainActivity : ComponentActivity() {
             // to avoid collisions
             if (myId.toLong()<info.endpointName.toLong()) {
                 Log.d("###", "onEndpointFound         requestConnection sent")
-
-                runBlocking {
-                    launch{
-                        if (myId.toLong()<info.endpointName.toLong()) {
-                            Log.d("###", "onEndpointFound         requestConnection sent")
-                            connectionsClient.requestConnection(
-                                myId,
-                                endpointId,
-                                connectionLifecycleCallback
-                            )
-                        }
-                    }
-                }
+                runBlocking { launch{ connectionsClient.requestConnection(myId, endpointId,connectionLifecycleCallback)}}
             }
         }
         override fun onEndpointLost(endpointId: String) {
@@ -397,7 +391,7 @@ class MainActivity : ComponentActivity() {
             val p = String(payload.asBytes()!!, Charsets.UTF_8)
             val aInfo :  List<String> = p.split(sep)
 
-            Log.d("###","            >>>>> received  $aInfo ")
+            Log.d("###","            >>>>> received from endpointId $endpointId   $aInfo  ")
 
             // Check if 4 fields were received
             if (aInfo.size != 4) return
@@ -428,15 +422,16 @@ class MainActivity : ComponentActivity() {
             if (newDistance[0] > maxDistance) newVote=emptyVote
 
             // Add new vote
-            // Log.d("###","payloadCallback      adding to channel  $aInfo ")
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
-
 
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // Log.d("###","  onPayload  TransferUpdate  endpointId: $endpointId  update: ${update.status}  ${update.payloadId} ${update.bytesTransferred} ${update.totalBytes} ")
 
+            if (update.status == PayloadTransferUpdate.Status.CANCELED || update.status == PayloadTransferUpdate.Status.FAILURE) {
+                Log.d("###","  onPayload  TransferUpdate  ### ERROR ###  endpointId: $endpointId  update: ${update.status}  ${update.payloadId} ${update.bytesTransferred} ${update.totalBytes} ")
+                Toast.makeText(this@MainActivity, getString(R.string.restart_app), Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -1122,6 +1117,8 @@ class MainActivity : ComponentActivity() {
         myVoteChanged=true
         timerScreenOn = true
         timerLocOn = true
+        sendCounter=sendCounterMax-3   // to delay trigger a Broadcast
+
     }
 
     @CallSuper

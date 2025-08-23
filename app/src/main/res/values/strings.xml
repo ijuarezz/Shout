@@ -17,4 +17,5 @@
     <string name="pPermissionsRequired">Permissions required:</string>
     <string name="pBluetooth">- \"Bluetooth/Wi-Fi\" to discover other users around you.\n- \"Location\" to filter messages by distance.</string>
     <string name="pContinue">Continue</string>
+    <string name="restart_app">Communication error, please restart app</string>
 </resources>
