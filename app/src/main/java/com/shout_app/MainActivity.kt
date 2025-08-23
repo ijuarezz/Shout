@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.CallSuper
 import androidx.compose.animation.core.InfiniteRepeatableSpec
@@ -703,7 +704,7 @@ class MainActivity : ComponentActivity() {
                         val coroutineScope = rememberCoroutineScope()
 
                         Scaffold(
-                            modifier = Modifier.padding(start = 0.dp, end = 0.dp, top = 40.dp, bottom = 40.dp),
+                            modifier = Modifier.padding(start = 0.dp, end = 0.dp, top = 80.dp, bottom = 40.dp),
                             topBar = {
                                 Box(
                                     modifier = Modifier.fillMaxWidth()
@@ -870,7 +871,7 @@ class MainActivity : ComponentActivity() {
                         .background(MaterialTheme.colorScheme.background)
                 ){
                     Scaffold(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 40.dp),
+                        modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 80.dp, bottom = 40.dp),
                         topBar = {
 
                             tallyColor = if(myVote == emptyVote){
@@ -1104,6 +1105,8 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
+
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         getMyPreferences()
