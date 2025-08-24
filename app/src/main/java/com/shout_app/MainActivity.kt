@@ -3,7 +3,6 @@ package com.shout_app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
-import android.location.Location
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -83,9 +82,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.AdvertisingOptions
 import com.google.android.gms.nearby.connection.ConnectionInfo
@@ -99,9 +95,6 @@ import com.google.android.gms.nearby.connection.Payload
 import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
-import com.google.android.gms.tasks.CancellationToken
-import com.google.android.gms.tasks.CancellationTokenSource
-import com.google.android.gms.tasks.OnTokenCanceledListener
 import com.shout_app.ui.theme.AppTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -109,8 +102,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.Timer
 import java.util.TimerTask
-import kotlin.Float.Companion.POSITIVE_INFINITY
-
 
 
 
@@ -122,14 +113,11 @@ const val tooOldMins: Long = 3 * 60   //  180 sec = 3 mins
 //const val tooOldMins: Long = 1 * 60   //  60 sec = 1 min
 
 const val sendCounterMax: Int = ((tooOldMins*1000/screenFreq)/4).toInt()   //  send empty vote every quarter of tooOldDuration = 45 secs
-
-const val locFreq: Long = 60 * 1000   //  1 min
 const val maxVoteLength: Int = 40   // 40 chars
 
-const val sep = "╚"
 const val emptyVote = "<no vote>"
 
-const val barUnicode = "\u275a"
+const val personUnicode = "\uD83D\uDC64"
 
 class MainActivity : ComponentActivity() {
 
@@ -138,9 +126,6 @@ class MainActivity : ComponentActivity() {
     data class IdVote(val id: String, val vote: String)
 
     // *******************  VARIABLES   *******************
-    var maxDistance = 10f  //   10 meters
-    var myLat: Double = 0.0
-    var myLong: Double = 0.0
     var sendCounter:Int=0
     var myVoteChanged=true
 
@@ -151,7 +136,6 @@ class MainActivity : ComponentActivity() {
     private var votesCount:Int=0
     private var noVotesCount:Int=0
 
-    private var fusedLocationClient: FusedLocationProviderClient? = null
     private val strategy = Strategy.P2P_CLUSTER
     private lateinit var connectionsClient: ConnectionsClient
 
@@ -164,9 +148,6 @@ class MainActivity : ComponentActivity() {
     // *******************  TIMERS   *******************
     private val timerProcess = Timer(true)
     private var timerScreenOn = true
-
-    private val timerLoc = Timer(true)
-    var timerLocOn = true
 
     // *******************  TABLES   *******************
     private var idToVote = mutableMapOf<String, String>()
@@ -332,8 +313,8 @@ class MainActivity : ComponentActivity() {
         if (sendCounter>0) return
 
         // Broadcast vote
-        val p = "$myId$sep$myLat$sep$myLong$sep$myVote"
-        Log.d("###", "   sending $p  to endpointsList $endpointsList ")
+        val p = "$myId$myVote"
+        Log.d("###", "   sending $myId $myVote  to endpointsList $endpointsList ")
         connectionsClient.sendPayload(endpointsList.toList(),Payload.fromBytes(p.toByteArray()))
 
     }
@@ -375,7 +356,7 @@ class MainActivity : ComponentActivity() {
             Log.d("###","onEndpointFound  endpointId: $endpointId  info: ${info.serviceId} ${info.endpointName} ${info.endpointInfo}")
 
             // to avoid collisions
-            if (myId.toLong()<info.endpointName.toLong()) {
+            if (myId.compareTo(info.endpointName)>0) {
                 Log.d("###", "onEndpointFound         requestConnection sent")
                 runBlocking { launch{ connectionsClient.requestConnection(myId, endpointId,connectionLifecycleCallback)}}
             }
@@ -390,37 +371,12 @@ class MainActivity : ComponentActivity() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
 
             val p = String(payload.asBytes()!!, Charsets.UTF_8)
-            val aInfo :  List<String> = p.split(sep)
 
-            Log.d("###","            >>>>> received from endpointId $endpointId   $aInfo  ")
+            if(p.isBlank() or (p.length<11)) return
+            val newId: String = p.take(10)
+            var newVote: String = p.replace(newId,"")
 
-            // Check if 4 fields were received
-            if (aInfo.size != 4) return
-
-            val newId: String = aInfo[0]
-            val newLat: String = aInfo[1]
-            val newLong: String = aInfo[2]
-            var newVote: String = aInfo[3]
-
-            val newLatD: Double = newLat.toDouble()
-            val newLongD: Double = newLong.toDouble()
-
-            // Warning if missing location
-            if(myLat == 0.toDouble()){
-            Toast.makeText(this@MainActivity, getString(R.string.location_error), Toast.LENGTH_LONG).show()
-            myLat = newLatD
-            myLong = newLongD
-            }
-
-            // Check for empty strings
-            if(newId.isEmpty() or newVote.isEmpty()) return
-
-            // Check if within max distance
-            val newDistance: FloatArray = floatArrayOf(0f)
-            Location.distanceBetween(newLatD,newLongD, myLat,myLong,newDistance)
-
-
-            if (newDistance[0] > maxDistance) newVote=emptyVote
+            Log.d("###","            >>>>> received from endpointId $endpointId   $newId  $newVote  ")
 
             // Add new vote
             runBlocking {voteChannel.send(IdVote(newId,newVote))}
@@ -440,27 +396,6 @@ class MainActivity : ComponentActivity() {
 
     // *******************  FUNCTIONS   *******************
     @SuppressLint("MissingPermission")
-    private fun getLoc(){
-
-        // Get Location
-        fusedLocationClient?.getCurrentLocation(
-            PRIORITY_HIGH_ACCURACY,
-            object : CancellationToken() {
-                override fun onCanceledRequested(p0: OnTokenCanceledListener) =
-                    CancellationTokenSource().token
-
-                override fun isCancellationRequested() = false
-            })
-            ?.addOnSuccessListener { location: Location? ->
-                if (location != null) {
-                    myLat = location.latitude
-                    myLong = location.longitude
-
-                }
-
-            }
-
-    }
 
     private fun checkPermissions() {
 
@@ -590,9 +525,10 @@ class MainActivity : ComponentActivity() {
         if (sharedPreference.contains("myId")) {
             myId = sharedPreference.getString("myId", emptyVote).toString()
         } else {
-            myId = System.currentTimeMillis().toString()
+            myId = List(10) { ('a'..'z') .random() }.joinToString("")
             editor.putString("myId", myId)
             editor.apply()
+
         }
 
         // Check playIntro
@@ -609,7 +545,6 @@ class MainActivity : ComponentActivity() {
 
     private fun startNearby(){
 
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         connectionsClient = Nearby.getConnectionsClient(this)
 
         // start Discovery
@@ -651,21 +586,6 @@ class MainActivity : ComponentActivity() {
             screenFreq
         )
 
-        // Recurring event to update Location
-        timerLoc.schedule(
-
-            object : TimerTask() {
-                override fun run() {
-                    if (!timerLocOn) return
-                    runOnUiThread {
-                        getLoc()
-                    }
-                }
-            },
-            0,
-            locFreq
-        )
-
     }
 
 
@@ -674,7 +594,6 @@ class MainActivity : ComponentActivity() {
         super.onSaveInstanceState(savedInstanceState)
         savedInstanceState.putString("myId", myId)
         savedInstanceState.putString("myVote", myVote)
-        savedInstanceState.putFloat("maxDistance", maxDistance)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
@@ -682,7 +601,6 @@ class MainActivity : ComponentActivity() {
 
         myId = savedInstanceState.getString("myId").toString()
         myVote = savedInstanceState.getString("myVote").toString()
-        maxDistance = savedInstanceState.getFloat("maxDistance")
         myVoteChanged=true
     }
 
@@ -700,7 +618,7 @@ class MainActivity : ComponentActivity() {
                             .background(MaterialTheme.colorScheme.background)
                     )
                     {
-                        val pagerState = rememberPagerState(initialPage = 0, pageCount = { 5 })
+                        val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
                         val coroutineScope = rememberCoroutineScope()
 
                         Scaffold(
@@ -720,8 +638,6 @@ class MainActivity : ComponentActivity() {
                                                 0 -> getString(R.string.intro_basic)
                                                 1 -> getString(R.string.intro_input)
                                                 2 -> getString(R.string.intro_pizza)
-                                                3 -> getString(R.string.intro_std_range)
-                                                4 -> getString(R.string.intro_ext_range)
                                                 else -> getString(R.string.intro_basic)
                                         }
                                     )
@@ -747,8 +663,6 @@ class MainActivity : ComponentActivity() {
                                                         0 -> R.drawable.__basic
                                                         1 -> R.drawable.__input
                                                         2 -> R.drawable.__pizza
-                                                        3 -> R.drawable.__std_range
-                                                        4 -> R.drawable.__ext_range
                                                         else -> R.drawable.__basic
                                                     }
                                             ),
@@ -773,7 +687,8 @@ class MainActivity : ComponentActivity() {
 
                                     onClick = {
 
-                                        if(pagerState.currentPage==4){
+                                        // Log.d("###", "=== onClick  pagerState.currentPage  ${pagerState.currentPage} ")
+                                        if(pagerState.currentPage==2){
 
                                             val sharedPreference =
                                                 getSharedPreferences("MyPreferences", MODE_PRIVATE)
@@ -801,7 +716,7 @@ class MainActivity : ComponentActivity() {
                                     Icon(
 
                                         painter = painterResource(id =
-                                            if(pagerState.currentPage==4){
+                                            if(pagerState.currentPage==2){
                                                 R.drawable.ic_baseline_clear_24
                                             }
                                             else{
@@ -836,8 +751,6 @@ class MainActivity : ComponentActivity() {
             val focusRequester = remember { FocusRequester() }
 
             var textTyped by rememberSaveable { mutableStateOf("") }
-            var extendedMode by rememberSaveable { mutableStateOf(false) }
-
 
             val keyboardController = LocalSoftwareKeyboardController.current
             val focusManager = LocalFocusManager.current
@@ -975,13 +888,16 @@ class MainActivity : ComponentActivity() {
                                 Text(
 
                                     text = buildAnnotatedString {
-                                        withStyle(style = SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primaryContainer)) {
-                                            append(barUnicode.repeat(votesCount))
+
+                                        withStyle(style = SpanStyle(fontSize = 16.sp, color = MaterialTheme.colorScheme.primaryContainer)) {
+                                            append(personUnicode.repeat(votesCount))
                                         }
-                                        withStyle(style = SpanStyle(fontSize = 22.sp, color = MaterialTheme.colorScheme.surfaceVariant)) {
-                                            append(barUnicode.repeat(noVotesCount))
+
+                                        withStyle(style = SpanStyle(fontSize = 16.sp, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))) {
+                                            append(personUnicode.repeat(noVotesCount))
                                         }
                                     },
+
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 )
                             }
@@ -1070,31 +986,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                        },
-                        floatingActionButton = {
-
-                            FloatingActionButton(
-                                onClick = {
-                                    extendedMode = !extendedMode
-
-                                    if(extendedMode){
-                                        maxDistance=POSITIVE_INFINITY
-                                        Toast.makeText(this@MainActivity, getString(R.string.range_ext), Toast.LENGTH_LONG).show()
-                                    }
-                                    else {
-                                        maxDistance=10f
-                                        Toast.makeText(this@MainActivity, getString(R.string.range_std), Toast.LENGTH_LONG).show()
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    painter = if (extendedMode) painterResource(id = R.drawable.spatial_tracking_24px) else painterResource(id = R.drawable.spatial_audio_off_24px) ,
-                                    contentDescription = "Change",
-                                    modifier = Modifier.size(30.dp)
-                                )
-                            }
-                        },
-                        floatingActionButtonPosition = FabPosition.End
+                        }
                     )
                 }
             }
@@ -1119,7 +1011,6 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         myVoteChanged=true
         timerScreenOn = true
-        timerLocOn = true
         sendCounter=sendCounterMax-3   // to delay trigger a Broadcast
 
     }
@@ -1128,7 +1019,6 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         myVoteChanged=true
         timerScreenOn = false
-        timerLocOn = false
 
         super.onPause()
 
@@ -1143,7 +1033,6 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
 
         timerProcess.cancel()
-        timerLoc.cancel()
 
         if (this::connectionsClient.isInitialized) {
             connectionsClient.stopAdvertising()
