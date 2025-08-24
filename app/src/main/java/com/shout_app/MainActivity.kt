@@ -545,6 +545,39 @@ class MainActivity : ComponentActivity() {
 
     private fun startNearby(){
 
+        /*
+        class YourAppActivity : AppCompatActivity() {
+
+    private lateinit var connectionsClient: ConnectionsClient
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // ... your other onCreate code
+
+        connectionsClient = Nearby.getConnectionsClient(this)
+        cleanUpPreviousConnections()
+    }
+
+    private fun cleanUpPreviousConnections() {
+        // Disconnect from any endpoints you were previously connected to
+        connectionsClient.stopAllEndpoints()
+            .addOnSuccessListener {
+                // Successfully disconnected from all endpoints.
+                // You can now proceed to start your new connection.
+                Log.d("NearbyConnections", "Successfully disconnected from all endpoints.")
+            }
+            .addOnFailureListener { e ->
+                // Handle the error if the operation failed.
+                Log.e("NearbyConnections", "Failed to disconnect from all endpoints: ${e.message}")
+            }
+    }
+
+    // ... your other app logic
+}
+         */
+
+
+
         connectionsClient = Nearby.getConnectionsClient(this)
 
         // start Discovery
@@ -867,15 +900,12 @@ class MainActivity : ComponentActivity() {
 
                             Card(
 
-                                colors= cardColors(containerColor = MaterialTheme.colorScheme.background,contentColor = MaterialTheme.colorScheme.background),
+                                //colors= cardColors(containerColor = MaterialTheme.colorScheme.background,contentColor = MaterialTheme.colorScheme.background),
                                 border= outlinedCardBorder(true),
                                 elevation = CardDefaults.elevatedCardElevation(),
 
                                 // elevation = cardElevation(defaultElevation = 10.dp),
 
-                                onClick = {Toast.makeText(myContext,
-                                    "\u2611 $votesCount    \u2610 $noVotesCount",
-                                    Toast.LENGTH_SHORT).show()},
 
                                 modifier = Modifier
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -885,22 +915,18 @@ class MainActivity : ComponentActivity() {
 
                             ) {
 
-                                Text(
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${getString(R.string.Shouting)} $votesCount     ${getString(R.string.Listening)} $noVotesCount",
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
 
-                                    text = buildAnnotatedString {
-
-                                        withStyle(style = SpanStyle(fontSize = 16.sp, color = MaterialTheme.colorScheme.primaryContainer)) {
-                                            append(personUnicode.repeat(votesCount))
-                                        }
-
-                                        withStyle(style = SpanStyle(fontSize = 16.sp, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))) {
-                                            append(personUnicode.repeat(noVotesCount))
-                                        }
-                                    },
-
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                )
+                                }
                             }
+
 
                         },
                         content = { paddingValues ->
@@ -998,6 +1024,7 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
 
+        Log.d("###", "@@@   onCreate")
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
@@ -1008,6 +1035,7 @@ class MainActivity : ComponentActivity() {
 
     @CallSuper
     override fun onResume() {
+        Log.d("###", "@@@      onResume")
         super.onResume()
         myVoteChanged=true
         timerScreenOn = true
@@ -1017,6 +1045,7 @@ class MainActivity : ComponentActivity() {
 
     @CallSuper
     override fun onPause() {
+        Log.d("###", "@@@         onPause")
         myVoteChanged=true
         timerScreenOn = false
 
@@ -1026,12 +1055,16 @@ class MainActivity : ComponentActivity() {
 
     @CallSuper
     override fun onStop() {
+
+        Log.d("###", "@@@           onStop")
+
         super.onStop()
     }
 
     @CallSuper
     override fun onDestroy() {
 
+        Log.d("###", "@@@              onDestroy")
         timerProcess.cancel()
 
         if (this::connectionsClient.isInitialized) {
