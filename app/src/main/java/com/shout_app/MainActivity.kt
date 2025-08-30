@@ -913,8 +913,7 @@ class MainActivity : ComponentActivity() {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        // text = "${getString(R.string.active)} $votesCount     ${getString(R.string.total)} ${noVotesCount+votesCount}",
-                                        text = "${getString(R.string.active)} 12     ${getString(R.string.total)} 23",
+                                        text = "${getString(R.string.active)} $votesCount     ${getString(R.string.total)} ${noVotesCount+votesCount}",
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     )
 
