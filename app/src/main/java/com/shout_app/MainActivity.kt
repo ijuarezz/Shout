@@ -42,10 +42,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CardDefaults.cardColors
-import androidx.compose.material3.CardDefaults.outlinedCardBorder
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -74,12 +73,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.nearby.Nearby
@@ -96,8 +92,11 @@ import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
 import com.shout_app.ui.theme.AppTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.Timer
@@ -116,8 +115,6 @@ const val sendCounterMax: Int = ((tooOldMins*1000/screenFreq)/4).toInt()   //  s
 const val maxVoteLength: Int = 40   // 40 chars
 
 const val emptyVote = "<no vote>"
-
-const val personUnicode = "\uD83D\uDC64"
 
 class MainActivity : ComponentActivity() {
 
@@ -355,15 +352,27 @@ class MainActivity : ComponentActivity() {
 
             Log.d("###","onEndpointFound  endpointId: $endpointId  info: ${info.serviceId} ${info.endpointName} ${info.endpointInfo}")
 
-            // to avoid collisions
+            // to try to avoid collisions
             if (myId.compareTo(info.endpointName)>0) {
-                Log.d("###", "onEndpointFound         requestConnection sent")
-                runBlocking { launch{ connectionsClient.requestConnection(myId, endpointId,connectionLifecycleCallback)}}
+
+                CoroutineScope(Dispatchers.Main).launch {
+                    Log.d("###", "onEndpointFound         3 sec DELAY ")
+                    delay(3000L)
+                    Log.d("###", "onEndpointFound            requestConnection sent")
+                    connectionsClient.requestConnection(myId, endpointId,connectionLifecycleCallback)
+                }
+
+            }
+            else{
+                Log.d("###", "onEndpointFound            requestConnection sent")
+                connectionsClient.requestConnection(myId, endpointId,connectionLifecycleCallback)
             }
         }
+
         override fun onEndpointLost(endpointId: String) {
             Log.d("###","onEndpointLost  $endpointId")
             runBlocking {endPointChannel.send("-$endpointId")}
+
         }
     }
 
@@ -387,7 +396,7 @@ class MainActivity : ComponentActivity() {
 
             if (update.status == PayloadTransferUpdate.Status.CANCELED || update.status == PayloadTransferUpdate.Status.FAILURE) {
                 Log.d("###","  onPayload  TransferUpdate  ### ERROR ###  endpointId: $endpointId  update: ${update.status}  ${update.payloadId} ${update.bytesTransferred} ${update.totalBytes} ")
-                Toast.makeText(this@MainActivity, getString(R.string.restart_app), Toast.LENGTH_LONG).show()
+                // Toast.makeText(this@MainActivity, getString(R.string.restart_app), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -545,62 +554,50 @@ class MainActivity : ComponentActivity() {
 
     private fun startNearby(){
 
-        /*
-        class YourAppActivity : AppCompatActivity() {
 
-    private lateinit var connectionsClient: ConnectionsClient
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        // ... your other onCreate code
-
+        Log.d("###", "+++    startNearby")
         connectionsClient = Nearby.getConnectionsClient(this)
-        cleanUpPreviousConnections()
-    }
+        Log.d("###", "+++    startNearby    connectionsClient.isInitialized  ${this::connectionsClient.isInitialized}")
 
-    private fun cleanUpPreviousConnections() {
-        // Disconnect from any endpoints you were previously connected to
-        connectionsClient.stopAllEndpoints()
-            .addOnSuccessListener {
-                // Successfully disconnected from all endpoints.
-                // You can now proceed to start your new connection.
-                Log.d("NearbyConnections", "Successfully disconnected from all endpoints.")
-            }
-            .addOnFailureListener { e ->
-                // Handle the error if the operation failed.
-                Log.e("NearbyConnections", "Failed to disconnect from all endpoints: ${e.message}")
-            }
-    }
+        // Clean Up
+        if (this::connectionsClient.isInitialized) {
 
-    // ... your other app logic
-}
-         */
+            Log.d("###", "+++    startNearby   stopAllEndpoints  started")
+            connectionsClient.stopAllEndpoints()
+            // runBlocking {                delay(5000L)             }
+            Log.d("###", "+++    startNearby   stopAllEndpoints  ended")
+        }
 
 
-
-        connectionsClient = Nearby.getConnectionsClient(this)
 
         // start Discovery
         val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
+        Log.d("###", "+++    startNearby   startDiscovery  started")
         connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
+        Log.d("###", "+++    startNearby   startDiscovery  ended")
+
+        Log.d("###", "+++    startNearby   connectionsClient.toString()    $connectionsClient")
 
         // start Advertising
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
 
+        Log.d("###", "+++    startNearby   startAdvertising  started")
         runBlocking {
             // async{
-                connectionsClient.startAdvertising(
-                    myId,
-                    packageName,
-                    connectionLifecycleCallback,
-                    advertisingOptions
-                )
+            connectionsClient.startAdvertising(
+                myId,
+                packageName,
+                connectionLifecycleCallback,
+                advertisingOptions
+            )
         }
+        Log.d("###", "+++    startNearby   startAdvertising  ended")
 
         // *******************  FLOW    *******************
         startTimers()
 
     }
+
 
     private fun startTimers() {
 
@@ -779,7 +776,7 @@ class MainActivity : ComponentActivity() {
         setContent {
 
             // Variables
-            var tallyColor: Color
+            var myColor: Color
 
             val focusRequester = remember { FocusRequester() }
 
@@ -820,14 +817,15 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 80.dp, bottom = 40.dp),
                         topBar = {
 
-                            tallyColor = if(myVote == emptyVote){
+                            myColor = if(myVote == emptyVote){
                                 MaterialTheme.colorScheme.primaryContainer
                             } else{
                                 MaterialTheme.colorScheme.surfaceVariant
                             }
 
-                            Card(
-                                colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
+                            ElevatedCard(
+                                elevation = CardDefaults.elevatedCardElevation(),
+                                colors= cardColors(containerColor = myColor,contentColor = myColor),
                                 modifier = Modifier
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
                                     .fillMaxWidth()
@@ -838,7 +836,7 @@ class MainActivity : ComponentActivity() {
                                 Row(
                                     modifier = Modifier
                                         .padding(horizontal = 4.dp)
-                                        .background(color = tallyColor),
+                                        .background(color = myColor),
                                 ) {
                                     Text(
                                         modifier = Modifier
@@ -868,8 +866,8 @@ class MainActivity : ComponentActivity() {
                                         placeholder = { Text(getString(R.string.placeholder)) },
                                         singleLine = true,
                                         colors=TextFieldDefaults.colors(
-                                            focusedContainerColor = tallyColor,
-                                            unfocusedContainerColor = tallyColor,
+                                            focusedContainerColor = myColor,
+                                            unfocusedContainerColor = myColor,
                                             focusedIndicatorColor = Color.Transparent,
                                             unfocusedIndicatorColor = Color.Transparent,
                                             disabledIndicatorColor = Color.Transparent
@@ -898,14 +896,9 @@ class MainActivity : ComponentActivity() {
 
                         bottomBar = {
 
-                            Card(
+                            ElevatedCard(
 
-                                //colors= cardColors(containerColor = MaterialTheme.colorScheme.background,contentColor = MaterialTheme.colorScheme.background),
-                                border= outlinedCardBorder(true),
                                 elevation = CardDefaults.elevatedCardElevation(),
-
-                                // elevation = cardElevation(defaultElevation = 10.dp),
-
 
                                 modifier = Modifier
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -920,7 +913,7 @@ class MainActivity : ComponentActivity() {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "${getString(R.string.Shouting)} $votesCount     ${getString(R.string.Listening)} $noVotesCount",
+                                        text = "${getString(R.string.active)} $votesCount     ${getString(R.string.total)} ${noVotesCount+votesCount}",
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     )
 
@@ -942,14 +935,15 @@ class MainActivity : ComponentActivity() {
                                     val thisVote= eachTally.first
                                     val sameVote = (myVote==thisVote)
 
-                                    tallyColor = if(sameVote){
+                                    myColor = if(sameVote){
                                         MaterialTheme.colorScheme.primaryContainer
                                     } else{
                                         MaterialTheme.colorScheme.surfaceVariant
                                     }
 
-                                    Card(
-                                        colors= cardColors(containerColor = tallyColor,contentColor = tallyColor),
+                                     ElevatedCard(
+                                        elevation = CardDefaults.elevatedCardElevation(),
+                                        colors= cardColors(containerColor = myColor,contentColor = myColor),
                                         modifier = Modifier
                                         .padding(horizontal = 16.dp, vertical = 4.dp)
                                         .fillMaxWidth()
@@ -966,7 +960,7 @@ class MainActivity : ComponentActivity() {
 
                                             modifier = Modifier
                                                 .padding(horizontal = 4.dp, vertical = 4.dp)
-                                                .background(color = tallyColor)
+                                                .background(color = myColor)
 
                                         ) {
 

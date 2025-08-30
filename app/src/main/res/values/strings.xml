@@ -12,7 +12,7 @@
     <string name="pPermissionsRequired">Permissions required:</string>
     <string name="pBluetooth">- \"Bluetooth/Wi-Fi/Location/Nearby\" permissions are required to discover other users around you.</string>
     <string name="pContinue">Continue</string>
-    <string name="restart_app">Communication error, please restart app</string>
-    <string name="Shouting">Shouting:</string>
-    <string name="Listening">Listening:</string>
+    <string name="restart_app">Communication error. Please restart app</string>
+    <string name="active">Active:</string>
+    <string name="total">Total:</string>
 </resources>

@@ -13,6 +13,6 @@
     <string name="pBluetooth">- \"Bluetooth/Wi-Fi/Ubicacion/Nearby\" son permisos requeridos para descubrir otros usuarios a tu alrededor.</string>
     <string name="pContinue">Continuar</string>
     <string name="restart_app">Error de comunicacion, reiniciar aplicacion.</string>
-    <string name="Shouting">Gritando:</string>
-    <string name="Listening">Escuchando:</string>
+    <string name="active">Activos:</string>
+    <string name="total">Total:</string>
 </resources>
