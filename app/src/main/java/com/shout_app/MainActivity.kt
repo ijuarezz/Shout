@@ -336,7 +336,7 @@ class MainActivity : ComponentActivity() {
             }
             else{
                 Log.d("###","====    onConnectionResult  ### ERROR ###  $endpointId   result $result} ")
-                Toast.makeText(this@MainActivity, getString(R.string.restart_app), Toast.LENGTH_LONG).show()
+                // Toast.makeText(this@MainActivity, getString(R.string.restart_app), Toast.LENGTH_LONG).show()
             }
 
         }
@@ -353,7 +353,7 @@ class MainActivity : ComponentActivity() {
             Log.d("###","onEndpointFound  endpointId: $endpointId  info: ${info.serviceId} ${info.endpointName} ${info.endpointInfo}")
 
             // to try to avoid collisions
-            if (myId.compareTo(info.endpointName)>0) {
+            if (myId > info.endpointName) {
 
                 CoroutineScope(Dispatchers.Main).launch {
                     Log.d("###", "onEndpointFound         3 sec DELAY ")
@@ -555,14 +555,14 @@ class MainActivity : ComponentActivity() {
     private fun startNearby(){
 
 
-        Log.d("###", "+++    startNearby")
+        // Log.d("###", "+++    startNearby")
         connectionsClient = Nearby.getConnectionsClient(this)
-        Log.d("###", "+++    startNearby    connectionsClient.isInitialized  ${this::connectionsClient.isInitialized}")
+        // Log.d("###", "+++    startNearby    connectionsClient.isInitialized  ${this::connectionsClient.isInitialized}")
 
         // Clean Up
         if (this::connectionsClient.isInitialized) {
 
-            Log.d("###", "+++    startNearby   stopAllEndpoints  started")
+            // Log.d("###", "+++    startNearby   stopAllEndpoints  started")
             connectionsClient.stopAllEndpoints()
             // runBlocking {                delay(5000L)             }
             Log.d("###", "+++    startNearby   stopAllEndpoints  ended")
@@ -572,16 +572,16 @@ class MainActivity : ComponentActivity() {
 
         // start Discovery
         val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
-        Log.d("###", "+++    startNearby   startDiscovery  started")
+        // Log.d("###", "+++    startNearby   startDiscovery  started")
         connectionsClient.startDiscovery(packageName, endpointDiscoveryCallback, options)
-        Log.d("###", "+++    startNearby   startDiscovery  ended")
+        // Log.d("###", "+++    startNearby   startDiscovery  ended")
 
-        Log.d("###", "+++    startNearby   connectionsClient.toString()    $connectionsClient")
+        // Log.d("###", "+++    startNearby   connectionsClient.toString()    $connectionsClient")
 
         // start Advertising
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
 
-        Log.d("###", "+++    startNearby   startAdvertising  started")
+        // Log.d("###", "+++    startNearby   startAdvertising  started")
         runBlocking {
             // async{
             connectionsClient.startAdvertising(
@@ -591,7 +591,7 @@ class MainActivity : ComponentActivity() {
                 advertisingOptions
             )
         }
-        Log.d("###", "+++    startNearby   startAdvertising  ended")
+        // Log.d("###", "+++    startNearby   startAdvertising  ended")
 
         // *******************  FLOW    *******************
         startTimers()
@@ -913,7 +913,8 @@ class MainActivity : ComponentActivity() {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "${getString(R.string.active)} $votesCount     ${getString(R.string.total)} ${noVotesCount+votesCount}",
+                                        // text = "${getString(R.string.active)} $votesCount     ${getString(R.string.total)} ${noVotesCount+votesCount}",
+                                        text = "${getString(R.string.active)} 12     ${getString(R.string.total)} 23",
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     )
 
