@@ -507,7 +507,7 @@ class MainActivity : ComponentActivity() {
                     AlertDialog(
                         onDismissRequest = { },
                         title = { Text(getString(R.string.pPermissionsRequired)) },
-                        text = { Text(getString(R.string.pBluetooth)) },
+                        text = { Text(getString(R.string.pList)) },
                         confirmButton = {
                             TextButton(onClick = {
 

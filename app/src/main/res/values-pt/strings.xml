@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="permission_error">Não é possível instalar sem as permissões necessárias</string>
     <string name="max_chars_error">O número máximo de caracteres é</string>
     <string name="placeholder">Grite algo (ou escolha uma msg)</string>
     <string name="intro_basic">Dê sua opinião com as pessoas ao seu redor.</string>
@@ -10,7 +9,7 @@
     <string name="pPleaseOpen">Reabra o aplicativo para tentar novamente.</string>
     <string name="pExit">Fechar a aplicação</string>
     <string name="pPermissionsRequired">Permissões necessárias:</string>
-    <string name="pBluetooth">- \"Bluetooth/Wi-Fi/Localização//Nearby\" permissões são necessárias para descobrir outros usuários ao seu redor.</string>
+    <string name="pList">\"Bluetooth, Wi-Fi, Localização, Nearby\" permissões são necessárias para descobrir outros usuários ao seu redor.</string>
     <string name="pContinue">Continuar</string>
     <string name="restart_app">Erro de comunicação, reinicie o aplicativo.</string>
     <string name="active">Ativos:</string>

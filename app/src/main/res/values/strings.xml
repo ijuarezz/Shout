@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name" translatable="false">Shout!</string>
-    <string name="permission_error">Cannot start without required permissions</string>
     <string name="max_chars_error">Max numbers of characters is</string>
     <string name="placeholder">Add new (or select from below)</string>
     <string name="intro_basic">Share your opinions with people near you.</string>
@@ -10,7 +9,7 @@
     <string name="pPleaseOpen">Please open the application to try again.</string>
     <string name="pExit">Exit</string>
     <string name="pPermissionsRequired">Permissions required:</string>
-    <string name="pBluetooth">- \"Bluetooth/Wi-Fi/Location/Nearby\" permissions are required to discover other users around you.</string>
+    <string name="pList">\"Bluetooth, Wi-Fi, Location and Nearby\" permissions are required to discover other users around you.</string>
     <string name="pContinue">Continue</string>
     <string name="restart_app">Communication error. Please restart app</string>
     <string name="active">Active:</string>
