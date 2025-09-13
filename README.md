@@ -6,3 +6,4 @@ The intended audience is any group of people that want to communicate simple opi
 It is written in Kotlin, makes use of Composables functions and the Google Nearby API.
 Available in English, Portuguese and Spanish.
 
+Google Play: https://play.google.com/store/apps/details?id=com.shout_app
