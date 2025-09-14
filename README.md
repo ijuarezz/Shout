@@ -9,4 +9,5 @@ Available in English, Portuguese and Spanish.
 Google Play: https://play.google.com/store/apps/details?id=com.shout_app
 
 You can email me at:
+
 i j u a r e z . d e v @ g m a i l . c o m
