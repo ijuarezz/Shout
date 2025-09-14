@@ -1,6 +1,7 @@
 Shout! is an android app that lets you post your opinions on a board.
 
 ∙ No login, registration or Internet/data access required.
+
 ∙ The intended audience is any group of people that want to communicate simple opinions and see what the general consensus is.
 
 It is written in Kotlin, makes use of Composables functions and the Google Nearby API.
